@@ -1,58 +1,73 @@
-type Usuario = {
-  nome: string;
-  senha: string;
-  permissao: 'super' | 'usuario';
-};
+import { db } from './db'
 
-const CHAVE_USUARIOS = 'pousada_usuarios';
-const CHAVE_ATUAL = 'pousada_usuario_logado';
-
-export function criarUsuario(usuario: Usuario) {
-  if (typeof window === 'undefined') return;
-
-  const usuarios: Usuario[] = JSON.parse(localStorage.getItem(CHAVE_USUARIOS) || '[]');
-  usuarios.push(usuario);
-  localStorage.setItem(CHAVE_USUARIOS, JSON.stringify(usuarios));
+export type Usuario = {
+  nome: string
+  senha: string
+  permissao: 'super' | 'usuario'
 }
 
-export function fazerLogin(nome: string, senha: string): Usuario | null {
-  if (typeof window === 'undefined') return null;
+const CHAVE_ATUAL = 'pousada_usuario_logado'
 
-  let usuarios: Usuario[] = JSON.parse(localStorage.getItem(CHAVE_USUARIOS) || '[]');
+function salvarUsuarioLocal(usuario: Usuario) {
+  localStorage.setItem(CHAVE_ATUAL, JSON.stringify(usuario))
+}
+
+function carregarUsuarioLocal(): Usuario | null {
+  try {
+    const raw = localStorage.getItem(CHAVE_ATUAL)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+export async function criarUsuario(usuario: Usuario) {
+  if (typeof window === 'undefined') return
+
+  if (!usuario.nome || !usuario.senha) return
+
+  const existente = await db.usuarios.get(usuario.nome)
+  if (!existente) {
+    await db.usuarios.add(usuario)
+  }
+}
+
+export async function fazerLogin(nome: string, senha: string): Promise<Usuario | null> {
+  if (typeof window === 'undefined') return null
+
+  const usuarios = await db.usuarios.toArray()
 
   if (usuarios.length === 0) {
-    const adminPadrao: Usuario = { nome: 'admin', senha: '1234', permissao: 'super' };
-    usuarios = [adminPadrao];
-    localStorage.setItem(CHAVE_USUARIOS, JSON.stringify(usuarios));
+    const adminPadrao: Usuario = { nome: 'admin', senha: '1234', permissao: 'super' }
+    await db.usuarios.add(adminPadrao)
+    salvarUsuarioLocal(adminPadrao)
+    return adminPadrao
   }
 
-  const user = usuarios.find(u => u.nome === nome && u.senha === senha);
+  const user = usuarios.find(u => u.nome === nome && u.senha === senha)
   if (user) {
-    localStorage.setItem(CHAVE_ATUAL, JSON.stringify(user));
-    return user;
+    salvarUsuarioLocal(user)
+    return user
   }
 
-  return null;
+  return null
 }
 
 export function usuarioAtual(): Usuario | null {
-  if (typeof window === 'undefined') return null;
-
-  const user = localStorage.getItem(CHAVE_ATUAL);
-  return user ? JSON.parse(user) : null;
+  if (typeof window === 'undefined') return null
+  return carregarUsuarioLocal()
 }
 
 export function isAdmin(): boolean {
-  const user = usuarioAtual();
-  return user?.permissao === 'super';
+  return usuarioAtual()?.permissao === 'super'
 }
 
 export function estaLogado(): boolean {
-  return !!usuarioAtual();
+  return !!usuarioAtual()
 }
 
 export function logout() {
-  if (typeof window === 'undefined') return;
-
-  localStorage.removeItem(CHAVE_ATUAL);
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(CHAVE_ATUAL)
 }

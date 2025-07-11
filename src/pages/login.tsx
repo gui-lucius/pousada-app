@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Layout from '@/components/layout/Layout';
 import Input from '@/components/ui/Input';
 import Botao from '@/components/ui/Botao';
-import { fazerLogin } from '@/utils/auth';
+import { fazerLogin, criarUsuario } from '@/utils/auth';
 import Image from 'next/image';
 
 export default function LoginPage() {
@@ -12,22 +12,20 @@ export default function LoginPage() {
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
 
-  const handleLogin = () => {
-    setErro(''); // limpa erro anterior
+  const handleLogin = async () => {
+    setErro('');
 
-    const usuario = fazerLogin(nome, senha);
+    const usuario = await fazerLogin(nome, senha);
 
     if (usuario) {
-      localStorage.setItem('usuario_logado', JSON.stringify(usuario));
       router.push('/checkin');
     } else {
       setErro('Usuário ou senha inválidos!');
     }
   };
 
-  const resetarUsuarios = () => {
-    const admin = [{ nome: 'admin', senha: '1234', permissao: 'super' }];
-    localStorage.setItem('pousada_usuarios', JSON.stringify(admin));
+  const resetarUsuarios = async () => {
+    await criarUsuario({ nome: 'admin', senha: '1234', permissao: 'super' });
     alert('Usuário admin criado! Use admin / 1234');
   };
 
@@ -42,6 +40,7 @@ export default function LoginPage() {
             height={140}
             className="mb-4"
           />
+
           <Input
             label="Usuário"
             value={nome}
@@ -55,7 +54,9 @@ export default function LoginPage() {
             onChange={e => setSenha(e.target.value)}
             className="text-black text-lg py-3"
           />
+
           {erro && <p className="text-red-600 text-base">{erro}</p>}
+
           <div className="w-full flex flex-col items-center gap-2">
             <Botao texto="Entrar" onClick={handleLogin} />
             <button

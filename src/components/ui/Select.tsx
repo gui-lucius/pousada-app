@@ -1,4 +1,5 @@
-import { SelectHTMLAttributes } from 'react';
+import { SelectHTMLAttributes, useId } from 'react';
+import clsx from 'clsx';
 
 interface Option {
   label: string;
@@ -8,17 +9,48 @@ interface Option {
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
   options: string[] | Option[];
+  error?: string;
+  inputSize?: 'sm' | 'md' | 'lg';
+  placeholder?: string;
 }
 
-export default function Select({ label, options, ...rest }: SelectProps) {
+export default function Select({
+  label,
+  options,
+  error,
+  inputSize = 'md',
+  placeholder = 'Selecione...',
+  ...rest
+}: SelectProps) {
+  const selectId = useId();
+
+  const sizeClasses = {
+    sm: 'px-2 py-1 text-sm',
+    md: 'px-3 py-2',
+    lg: 'px-4 py-3 text-lg',
+  };
+
   return (
-    <div className="flex flex-col gap-1 mb-4">
-      <label className="text-sm font-medium text-gray-700">{label}</label>
+    <div className="flex flex-col gap-1 w-full">
+      <label htmlFor={selectId} className="text-sm font-medium text-gray-700">
+        {label}
+      </label>
+
       <select
+        id={selectId}
+        aria-invalid={!!error}
         {...rest}
-        className="w-full border border-gray-300 bg-white text-black rounded px-3 py-2 text-base min-h-[44px] shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+        className={clsx(
+          'w-full bg-white text-black rounded shadow-sm border transition focus:outline-none focus:ring-2',
+          sizeClasses[inputSize],
+          error
+            ? 'border-red-500 focus:ring-red-500'
+            : 'border-gray-300 focus:ring-blue-500',
+          'appearance-none'
+        )}
       >
-        <option value="">Selecione...</option>
+        <option value="">{placeholder}</option>
+
         {options.map((opt, idx) =>
           typeof opt === 'string' ? (
             <option key={idx} value={opt}>{opt}</option>
@@ -27,6 +59,8 @@ export default function Select({ label, options, ...rest }: SelectProps) {
           )
         )}
       </select>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

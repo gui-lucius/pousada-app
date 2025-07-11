@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Layout from '@/components/layout/Layout';
+import { db } from '@/utils/db';
 
 const chales = [
   'Chalé 1', 'Chalé 2', 'Chalé 3', 'Chalé 4', 'Chalé 5',
@@ -21,32 +22,36 @@ export default function CalendarioPage() {
   const [ocupacoes, setOcupacoes] = useState<Ocupacao[]>([]);
 
   useEffect(() => {
-    const reservas = JSON.parse(localStorage.getItem('pousada_reservas') || '[]');
-    const checkins = JSON.parse(localStorage.getItem('pousada_checkins') || '[]');
+    const carregar = async () => {
+      const reservas = await db.reservas.toArray();
+      const checkins = await db.checkins.toArray();
 
-    const toOcupacao = (item: any, status: 'reservado' | 'ocupado'): Ocupacao | null => {
-      try {
-        const entrada = new Date(item.dataEntrada || item.entrada);
-        const saida = new Date(item.dataSaida || item.saida);
-        return {
-          chale: item.chale,
-          de: entrada.getDate(),
-          ate: saida.getDate(),
-          mes: entrada.getMonth(),
-          ano: entrada.getFullYear(),
-          status,
-        };
-      } catch {
-        return null;
-      }
+      const toOcupacao = (item: any, status: 'reservado' | 'ocupado'): Ocupacao | null => {
+        try {
+          const entrada = new Date(item.dataEntrada || item.entrada);
+          const saida = new Date(item.dataSaida || item.saida);
+          return {
+            chale: item.chale,
+            de: entrada.getDate(),
+            ate: saida.getDate(),
+            mes: entrada.getMonth(),
+            ano: entrada.getFullYear(),
+            status,
+          };
+        } catch {
+          return null;
+        }
+      };
+
+      const todas = [
+        ...reservas.map((r) => toOcupacao(r, 'reservado')),
+        ...checkins.map((c) => toOcupacao(c, 'ocupado')),
+      ].filter(Boolean) as Ocupacao[];
+
+      setOcupacoes(todas);
     };
 
-    const todas = [
-      ...reservas.map((r: any) => toOcupacao(r, 'reservado')),
-      ...checkins.map((c: any) => toOcupacao(c, 'ocupado')),
-    ].filter(Boolean) as Ocupacao[];
-
-    setOcupacoes(todas);
+    carregar();
   }, [mesAtual]);
 
   const diasDoMes = Array.from(
@@ -56,7 +61,7 @@ export default function CalendarioPage() {
 
   const getStatus = (chale: string, dia: number): 'livre' | 'reservado' | 'ocupado' => {
     const ocupacoesDoDia = ocupacoes.filter(
-      o =>
+      (o) =>
         o.chale === chale &&
         o.mes === mesAtual.getMonth() &&
         o.ano === mesAtual.getFullYear() &&
@@ -64,8 +69,8 @@ export default function CalendarioPage() {
         dia <= o.ate
     );
 
-    if (ocupacoesDoDia.find(o => o.status === 'ocupado')) return 'ocupado';
-    if (ocupacoesDoDia.find(o => o.status === 'reservado')) return 'reservado';
+    if (ocupacoesDoDia.some((o) => o.status === 'ocupado')) return 'ocupado';
+    if (ocupacoesDoDia.some((o) => o.status === 'reservado')) return 'reservado';
     return 'livre';
   };
 
@@ -75,69 +80,83 @@ export default function CalendarioPage() {
     setMesAtual(novo);
   };
 
-  const nomeMes = mesAtual.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+  const nomeMes = mesAtual.toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  }).replace(/^./, (str) => str.toUpperCase());
 
   return (
     <Layout title="Calendário de Ocupação">
-      <div className="mb-4 flex items-center gap-4">
-        <h2 className="font-bold text-xl text-gray-800">{nomeMes}</h2>
-        <div className="flex gap-2">
-          <button onClick={() => mudarMes(-1)} className="px-3 py-1 bg-gray-300 rounded text-sm">
-            ◀ Mês Anterior
-          </button>
-          <button onClick={() => mudarMes(1)} className="px-3 py-1 bg-gray-300 rounded text-sm">
-            Próximo Mês ▶
-          </button>
+      <div className="mb-6">
+        {/* Cabeçalho */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-800">{nomeMes}</h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => mudarMes(-1)}
+              className="bg-gray-200 hover:bg-gray-300 text-sm px-3 py-1 rounded"
+            >
+              ◀ Mês Anterior
+            </button>
+            <button
+              onClick={() => mudarMes(1)}
+              className="bg-gray-200 hover:bg-gray-300 text-sm px-3 py-1 rounded"
+            >
+              Próximo Mês ▶
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="flex gap-4 text-sm mb-4 text-gray-700">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-white border" /> Livre
+        {/* Legenda */}
+        <div className="flex gap-4 text-sm text-gray-700 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-white border" /> Livre
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-yellow-400 border" /> Reservado
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-red-500 border" /> Ocupado
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-yellow-400 border" /> Reservado
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-500 border" /> Ocupado
-        </div>
-      </div>
 
-      <div className="overflow-auto">
-        <table className="table-fixed border border-gray-300 text-center text-sm text-gray-800">
-          <thead className="bg-gray-200">
-            <tr>
-              <th className="border p-2 sticky left-0 z-10 bg-gray-200">Dia</th>
-              {chales.map(chale => (
-                <th key={chale} className="border p-2">{chale}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {diasDoMes.map(dia => (
-              <tr key={dia}>
-                <td className="border px-2 py-1 sticky left-0 z-10 bg-gray-50">{dia}</td>
-                {chales.map(chale => {
-                  const status = getStatus(chale, dia);
-                  const bg =
-                    status === 'ocupado'
-                      ? 'bg-red-500'
-                      : status === 'reservado'
-                      ? 'bg-yellow-400'
-                      : 'bg-white';
-
-                  return (
-                    <td
-                      key={chale + dia}
-                      className={`border w-16 h-8 ${bg} hover:opacity-75 cursor-default`}
-                      title={`${chale} - Dia ${dia} - ${status}`}
-                    />
-                  );
-                })}
+        {/* Tabela de ocupações */}
+        <div className="overflow-auto border rounded shadow-sm">
+          <table className="table-fixed min-w-[900px] border-collapse text-center text-sm text-gray-800">
+            <thead className="bg-gray-100 sticky top-0 z-20">
+              <tr>
+                <th className="border p-2 sticky left-0 z-30 bg-gray-100">Dia</th>
+                {chales.map((chale) => (
+                  <th key={chale} className="border p-2 whitespace-nowrap">{chale}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {diasDoMes.map((dia) => (
+                <tr key={dia}>
+                  <td className="border px-2 py-1 sticky left-0 bg-white z-10 font-medium">{dia}</td>
+                  {chales.map((chale) => {
+                    const status = getStatus(chale, dia);
+                    const bg =
+                      status === 'ocupado'
+                        ? 'bg-red-500'
+                        : status === 'reservado'
+                        ? 'bg-yellow-400'
+                        : 'bg-white';
+
+                    return (
+                      <td
+                        key={`${chale}-${dia}`}
+                        className={`border w-12 h-8 ${bg} hover:opacity-75 transition cursor-default`}
+                        title={`${chale} - Dia ${dia} - ${status}`}
+                      />
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </Layout>
   );

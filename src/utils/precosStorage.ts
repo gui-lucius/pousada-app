@@ -1,5 +1,3 @@
-// utils/precosStorage.ts
-
 export type ItemPreco = { nome: string; preco: number; detalhes?: string }
 
 export type CategoriaPreco = {

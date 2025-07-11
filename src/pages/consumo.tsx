@@ -1,167 +1,125 @@
-// pages/consumo.tsx
-import Layout from '@/components/layout/Layout'
-import Botao from '@/components/ui/Botao'
-import { useEffect, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
+import Layout from '@/components/layout/Layout';
+import Botao from '@/components/ui/Botao';
+import { useEffect, useState } from 'react';
+import { db, Consumo, Subcomanda } from '@/utils/db';
+import { useRouter } from 'next/router';
 
-type ComandaItem = {
-  nome: string
-  preco: number
-  pago: boolean
-}
+export default function ListaComandas() {
+  const [comandas, setComandas] = useState<Consumo[]>([]);
+  const router = useRouter();
 
-type Comanda = {
-  id: string
-  cliente: string
-  data: string
-  itens: ComandaItem[]
-  finalizada: boolean
-}
-
-export default function ConsumoPage() {
-  const [comandas, setComandas] = useState<Comanda[]>([])
-  const [novoCliente, setNovoCliente] = useState('')
-  const [itemNome, setItemNome] = useState('')
-  const [itemPreco, setItemPreco] = useState<number>(0)
-  const [comandaSelecionada, setComandaSelecionada] = useState<string | null>(null)
-
-  // Carregar do localStorage
   useEffect(() => {
-    const armazenadas = localStorage.getItem('comandas')
-    if (armazenadas) {
-      setComandas(JSON.parse(armazenadas))
+    carregarComandas();
+  }, []);
+
+  const carregarComandas = async () => {
+    const abertas = await db.consumos.where('status').equals('aberta').toArray();
+    setComandas(abertas);
+  };
+
+  const criarNova = async (tipo: 'cliente' | 'hospede') => {
+    const nome = prompt(
+      tipo === 'hospede' ? 'Informe o nome do Hóspede:' : 'Informe o nome do Cliente:'
+    );
+    if (!nome || nome.trim() === '') return;
+
+    const timestamp = Date.now();
+
+    const novaComanda: Consumo = {
+      id: timestamp,
+      cliente: nome.trim(),
+      checkinId: 0, // número válido
+      hospede: tipo === 'hospede',
+      status: 'aberta',
+      criadoEm: new Date().toISOString(),
+      subcomandas: [
+        {
+          id: `principal-${timestamp}`,
+          nome: nome.trim(),
+          itens: [],
+          total: 0
+        }
+      ]
+    };
+
+    try {
+      await db.consumos.add(novaComanda);
+      setComandas((prev) => [...prev, novaComanda]);
+      router.push(`/comanda/${novaComanda.id}`);
+    } catch (err) {
+      console.error('Erro ao criar comanda:', err);
+      alert('❌ Erro ao criar comanda. Verifique o console para mais detalhes.');
     }
-  }, [])
+  };
 
-  // Salvar no localStorage
-  useEffect(() => {
-    localStorage.setItem('comandas', JSON.stringify(comandas))
-  }, [comandas])
+  const excluirComanda = async (id: number) => {
+    const confirmar = confirm(
+      'Tem certeza que deseja excluir esta comanda?\nEsta ação não pode ser desfeita.'
+    );
+    if (!confirmar) return;
 
-  const criarComanda = () => {
-    if (!novoCliente.trim()) return
-    const nova: Comanda = {
-      id: uuidv4(),
-      cliente: novoCliente,
-      data: new Date().toISOString(),
-      itens: [],
-      finalizada: false
-    }
-    setComandas([...comandas, nova])
-    setNovoCliente('')
-  }
+    await db.consumos.delete(id);
+    setComandas((prev) => prev.filter((c) => c.id !== id));
+  };
 
-  const adicionarItem = () => {
-    if (!comandaSelecionada || !itemNome || itemPreco <= 0) return
-    const atualizadas = comandas.map((comanda) =>
-      comanda.id === comandaSelecionada
-        ? {
-            ...comanda,
-            itens: [...comanda.itens, { nome: itemNome, preco: itemPreco, pago: false }]
-          }
-        : comanda
-    )
-    setComandas(atualizadas)
-    setItemNome('')
-    setItemPreco(0)
-  }
-
-  const marcarPagos = (comandaId: string) => {
-    const atualizadas = comandas.map((comanda) => {
-      if (comanda.id !== comandaId) return comanda
-      const novosItens = comanda.itens.map((item) => (item.pago ? item : { ...item, pago: true }))
-      const finalizada = novosItens.every((i) => i.pago)
-      return { ...comanda, itens: novosItens, finalizada }
-    })
-    setComandas(atualizadas)
-  }
-
-  const removerComanda = (id: string) => {
-    const confirm = window.confirm('Tem certeza que deseja excluir esta comanda?')
-    if (!confirm) return
-    setComandas(comandas.filter((c) => c.id !== id))
-    if (comandaSelecionada === id) setComandaSelecionada(null)
-  }
+  const calcularTotal = (comanda: Consumo): number => {
+    return comanda.subcomandas.reduce((soma, sub) => {
+      return (
+        soma +
+        sub.itens.reduce((acc, item) => acc + item.preco * item.quantidade, 0)
+      );
+    }, 0);
+  };
 
   return (
-    <Layout title="Comandas e Consumo">
-      <div className="max-w-4xl mx-auto text-black space-y-8">
+    <Layout title="🧾 Comandas">
+      <div className="max-w-3xl mx-auto space-y-6 text-black px-4">
 
         {/* Criar Nova Comanda */}
-        <div className="bg-white p-4 shadow rounded space-y-2">
-          <h2 className="text-xl font-bold">🆕 Nova Comanda</h2>
-          <div className="flex gap-2">
-            <input
-              className="border px-3 py-2 rounded w-full"
-              placeholder="Nome do Cliente ou Chalé"
-              value={novoCliente}
-              onChange={(e) => setNovoCliente(e.target.value)}
-            />
-            <Botao texto="Criar" onClick={criarComanda} />
+        <div className="bg-white p-6 rounded shadow text-center space-y-4">
+          <h3 className="text-lg font-semibold">Criar Nova Comanda</h3>
+          <div className="flex flex-col md:flex-row justify-center gap-4">
+            <Botao texto="🧍 Cliente Avulso" onClick={() => criarNova('cliente')} />
+            <Botao texto="🏨 Hóspede da Pousada" onClick={() => criarNova('hospede')} />
           </div>
         </div>
 
         {/* Lista de Comandas */}
-        <div className="space-y-4">
-          {comandas.map((comanda) => (
-            <div key={comanda.id} className="bg-white p-4 shadow rounded">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-bold text-lg">
-                    {comanda.cliente} {comanda.finalizada && <span className="text-green-600">(Fechada)</span>}
-                  </h3>
-                  <p className="text-sm text-gray-600">Criada em: {new Date(comanda.data).toLocaleString()}</p>
-                </div>
-                <button className="text-red-600 font-bold" onClick={() => removerComanda(comanda.id)}>
-                  ❌ Remover
-                </button>
-              </div>
+        <div className="bg-white p-6 rounded shadow">
+          <h2 className="text-xl font-bold mb-4">Comandas em Aberto</h2>
 
-              {/* Itens da Comanda */}
-              <ul className="mt-3 space-y-1">
-                {comanda.itens.map((item, idx) => (
-                  <li
-                    key={idx}
-                    className={`flex justify-between px-3 py-1 rounded ${
-                      item.pago ? 'bg-green-100 line-through' : 'bg-yellow-100'
-                    }`}
+          {comandas.length === 0 ? (
+            <p className="text-gray-500">Nenhuma comanda aberta no momento.</p>
+          ) : (
+            <ul className="space-y-3">
+              {comandas.map((c) => (
+                <li
+                  key={c.id}
+                  className="border p-4 rounded flex justify-between items-center hover:bg-gray-50 transition"
+                >
+                  <div
+                    className="flex-1 hover:underline cursor-pointer"
+                    onClick={() => router.push(`/comanda/${c.id}`)}
                   >
-                    <span>{item.nome}</span>
-                    <span>R$ {item.preco.toFixed(2)}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {/* Ações */}
-              {!comanda.finalizada && (
-                <>
-                  <div className="flex gap-2 mt-3">
-                    <input
-                      className="border px-3 py-2 rounded w-full"
-                      placeholder="Novo item"
-                      value={itemNome}
-                      onChange={(e) => setItemNome(e.target.value)}
-                      onFocus={() => setComandaSelecionada(comanda.id)}
-                    />
-                    <input
-                      className="border px-3 py-2 rounded w-28"
-                      type="number"
-                      value={itemPreco}
-                      onChange={(e) => setItemPreco(Number(e.target.value))}
-                      placeholder="Preço"
-                    />
-                    <Botao texto="Adicionar" onClick={adicionarItem} />
+                    <p className="font-medium">
+                      {c.hospede ? '🏨 Hóspede' : '🧍 Cliente'}: {c.cliente}
+                    </p>
+                    <p className="text-sm text-green-700 font-bold">
+                      Total: R$ {calcularTotal(c).toFixed(2)}
+                    </p>
                   </div>
-
-                  <div className="mt-2">
-                    <Botao texto="✅ Pagar Itens Selecionados" onClick={() => marcarPagos(comanda.id)} />
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
+                  <button
+                    onClick={() => excluirComanda(c.id)}
+                    className="text-red-600 hover:text-red-800 text-sm"
+                  >
+                    🗑️ Excluir
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </Layout>
-  )
+  );
 }

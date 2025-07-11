@@ -1,17 +1,17 @@
 import Layout from '@/components/layout/Layout';
 import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import Botao from '@/components/ui/Botao';
 import { useState, useEffect } from 'react';
-import { criarUsuario, usuarioAtual } from '@/utils/auth';
+import { db } from '@/utils/db';
 import { useApenasAdmin } from '@/utils/proteger';
+import { usuarioAtual } from '@/utils/auth';
 
 type Usuario = {
   nome: string;
   senha: string;
   permissao: 'usuario' | 'super';
 };
-
-const CHAVE_USUARIOS = 'pousada_usuarios';
 
 export default function AdminPage() {
   useApenasAdmin();
@@ -21,28 +21,35 @@ export default function AdminPage() {
   const [form, setForm] = useState<Usuario>({ nome: '', senha: '', permissao: 'usuario' });
   const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
 
-  const carregarUsuarios = () => {
-    const lista = JSON.parse(localStorage.getItem(CHAVE_USUARIOS) || '[]');
-    setUsuarios(lista);
-  };
-
   useEffect(() => {
     carregarUsuarios();
   }, []);
 
-  const handleSalvar = () => {
-    const novos = [...usuarios];
+  const carregarUsuarios = async () => {
+    const lista = await db.usuarios.toArray();
+    setUsuarios(lista);
+  };
 
-    if (editando !== null) {
-      novos[editando] = form;
-    } else {
-      novos.push(form);
-    }
-
-    localStorage.setItem(CHAVE_USUARIOS, JSON.stringify(novos));
+  const resetarFormulario = () => {
     setForm({ nome: '', senha: '', permissao: 'usuario' });
     setEditando(null);
     setMostrandoFormulario(false);
+  };
+
+  const handleSalvar = async () => {
+    if (!form.nome.trim() || !form.senha.trim()) {
+      alert('Preencha todos os campos.');
+      return;
+    }
+
+    if (editando !== null) {
+      const usuarioOriginal = usuarios[editando];
+      await db.usuarios.update(usuarioOriginal.nome, form);
+    } else {
+      await db.usuarios.add(form);
+    }
+
+    resetarFormulario();
     carregarUsuarios();
   };
 
@@ -52,55 +59,70 @@ export default function AdminPage() {
     setMostrandoFormulario(true);
   };
 
-  const handleExcluir = (index: number) => {
-    const userAtual = usuarioAtual();
-    const excluido = usuarios[index];
+  const handleExcluir = async (index: number) => {
+    const atual = usuarioAtual();
+    const alvo = usuarios[index];
 
-    if (userAtual?.nome === excluido.nome) {
+    if (atual?.nome === alvo.nome) {
       alert('Você não pode excluir seu próprio usuário!');
       return;
     }
 
-    if (confirm(`Tem certeza que deseja excluir "${excluido.nome}"?`)) {
-      const novos = usuarios.filter((_, i) => i !== index);
-      localStorage.setItem(CHAVE_USUARIOS, JSON.stringify(novos));
-      carregarUsuarios();
-    }
+    const confirmar = confirm(`Tem certeza que deseja excluir "${alvo.nome}"?`);
+    if (!confirmar) return;
+
+    await db.usuarios.where('nome').equals(alvo.nome).delete();
+    carregarUsuarios();
   };
 
   return (
     <Layout title="Administração">
       <div className="max-w-2xl mx-auto space-y-6">
-
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-semibold text-black">Usuários Cadastrados</h2>
-          <Botao texto="Novo Usuário" onClick={() => {
-            setEditando(null);
-            setForm({ nome: '', senha: '', permissao: 'usuario' });
-            setMostrandoFormulario(true);
-          }} />
+          <Botao
+            texto="Novo Usuário"
+            onClick={() => {
+              setEditando(null);
+              setForm({ nome: '', senha: '', permissao: 'usuario' });
+              setMostrandoFormulario(true);
+            }}
+          />
         </div>
 
+        {/* Lista de Usuários */}
         <div className="border rounded p-4 bg-white shadow">
           {usuarios.length === 0 ? (
             <p className="text-gray-600">Nenhum usuário cadastrado ainda.</p>
           ) : (
             <table className="w-full text-left text-sm text-black">
-              <thead>
+              <thead className="text-gray-700">
                 <tr>
                   <th className="py-2">Nome</th>
-                  <th>Permissão</th>
-                  <th>Ações</th>
+                  <th className="py-2">Permissão</th>
+                  <th className="py-2">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {usuarios.map((u, i) => (
-                  <tr key={i} className="border-t">
+                  <tr key={i} className="border-t border-gray-200">
                     <td className="py-2">{u.nome}</td>
-                    <td>{u.permissao === 'super' ? 'Super-Usuário' : 'Funcionário'}</td>
+                    <td>
+                      {u.permissao === 'super' ? 'Super-Usuário' : 'Funcionário'}
+                    </td>
                     <td className="space-x-2">
-                      <button onClick={() => handleEditar(i)} className="text-blue-600 underline">Editar</button>
-                      <button onClick={() => handleExcluir(i)} className="text-red-600 underline">Excluir</button>
+                      <button
+                        onClick={() => handleEditar(i)}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleExcluir(i)}
+                        className="text-red-600 hover:underline"
+                      >
+                        Excluir
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -109,31 +131,35 @@ export default function AdminPage() {
           )}
         </div>
 
+        {/* Formulário */}
         {mostrandoFormulario && (
           <div className="border rounded p-4 bg-white shadow space-y-4">
             <Input
               label="Nome"
               value={form.nome}
-              onChange={e => setForm({ ...form, nome: e.target.value })}
+              onChange={(e) => setForm({ ...form, nome: e.target.value })}
             />
             <Input
               label="Senha"
               type="password"
               value={form.senha}
-              onChange={e => setForm({ ...form, senha: e.target.value })}
+              onChange={(e) => setForm({ ...form, senha: e.target.value })}
             />
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-gray-700">Permissão</label>
-              <select
-                value={form.permissao}
-                onChange={e => setForm({ ...form, permissao: e.target.value as Usuario['permissao'] })}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="usuario">Funcionário</option>
-                <option value="super">Super-Usuário</option>
-              </select>
+            <Select
+              label="Permissão"
+              value={form.permissao}
+              onChange={(e) =>
+                setForm({ ...form, permissao: e.target.value as Usuario['permissao'] })
+              }
+              options={[
+                { label: 'Funcionário', value: 'usuario' },
+                { label: 'Super-Usuário', value: 'super' },
+              ]}
+            />
+            <div className="flex gap-4 pt-2">
+              <Botao texto={editando !== null ? 'Salvar Alterações' : 'Criar Usuário'} onClick={handleSalvar} />
+              <Botao texto="Cancelar" variant="secondary" onClick={resetarFormulario} />
             </div>
-            <Botao texto={editando !== null ? 'Salvar Alterações' : 'Criar Usuário'} onClick={handleSalvar} />
           </div>
         )}
       </div>

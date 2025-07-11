@@ -1,5 +1,3 @@
-// src/types/index.ts
-
 export interface Hospede {
   nome: string;
   documento: string;
@@ -29,13 +27,32 @@ export interface Consumo {
 }
 
 export interface CheckIn {
-  id: string;
-  hospede: Hospede;
-  dataEntrada: string;
-  dataSaidaPrevista: string;
-  numeroPessoas: number;
+  id: number;
+  nome: string;
+  dataNascimento: string;
+  sexo: string;
+  telefone: string;
+  email: string;
+  nacionalidade: string;
+  documento: string;
+  endereco: string;
+  bairro: string;
+  numero: string;
+  cidade: string;
+  estado: string;
+  cep: string;
+  acompanhantes: string;
+  entrada: string;
+  saida: string;
   chale: string;
-  observacoes?: string;
+  valor: string;
+
+  // ✅ Campos adicionados para cálculo por hóspede
+  valorEntrada?: string;
+  adultos?: string;
+  criancas0a3?: string;
+  criancas4a9?: string;
+  descontoPersonalizado?: string;
 }
 
 export interface CheckOut {
@@ -44,4 +61,11 @@ export interface CheckOut {
   consumo: Consumo[];
   formaPagamento: string;
   total: number;
+}
+
+export interface Usuario {
+  id: string;
+  nome: string;
+  senha: string;
+  permissao: 'usuario' | 'super';
 }
