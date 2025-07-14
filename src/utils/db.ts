@@ -3,7 +3,7 @@ import { Usuario as UsuarioTipo } from './auth';
 import {
   criptografarObjeto,
   descriptografarObjeto
-} from './criptografia'; // ← NOVO
+} from './criptografia';
 
 export interface Reserva {
   id: number;
@@ -140,10 +140,40 @@ export interface PrecosConfig {
   >;
 }
 
+class ReservaCripto {
+  static encrypt(obj: Reserva): Record<string, unknown> {
+    return criptografarObjeto(obj) as unknown as Record<string, unknown>;
+  }
+
+  static decrypt(obj: Record<string, unknown>): Reserva {
+    return descriptografarObjeto(obj) as unknown as Reserva;
+  }
+}
+
+class CheckinCripto {
+  static encrypt(obj: CheckIn): Record<string, unknown> {
+    return criptografarObjeto(obj) as unknown as Record<string, unknown>;
+  }
+
+  static decrypt(obj: Record<string, unknown>): CheckIn {
+    return descriptografarObjeto(obj) as unknown as CheckIn;
+  }
+}
+
+class DespesaCripto {
+  static encrypt(obj: Despesa): Record<string, unknown> {
+    return criptografarObjeto(obj) as unknown as Record<string, unknown>;
+  }
+
+  static decrypt(obj: Record<string, unknown>): Despesa {
+    return descriptografarObjeto(obj) as unknown as Despesa;
+  }
+}
+
 class PousadaDB extends Dexie {
-  reservas!: Table<any, number>;
-  checkins!: Table<any, number>;
-  despesas!: Table<any, string>;
+  reservas!: Table<Reserva, number>;
+  checkins!: Table<CheckIn, number>;
+  despesas!: Table<Despesa, string>;
   consumos!: Table<Consumo, number>;
   checkouts!: Table<Checkout, number>;
   precos!: Table<PrecosConfig, string>;
@@ -166,37 +196,6 @@ class PousadaDB extends Dexie {
     this.reservas.mapToClass(ReservaCripto);
     this.checkins.mapToClass(CheckinCripto);
     this.despesas.mapToClass(DespesaCripto);
-  }
-}
-
-// 🧠 Classes intermediárias para salvar os dados criptografados
-class ReservaCripto {
-  static encrypt(obj: Reserva) {
-    return criptografarObjeto(obj);
-  }
-
-  static decrypt(obj: any): Reserva {
-    return descriptografarObjeto(obj);
-  }
-}
-
-class CheckinCripto {
-  static encrypt(obj: CheckIn) {
-    return criptografarObjeto(obj);
-  }
-
-  static decrypt(obj: any): CheckIn {
-    return descriptografarObjeto(obj);
-  }
-}
-
-class DespesaCripto {
-  static encrypt(obj: Despesa) {
-    return criptografarObjeto(obj);
-  }
-
-  static decrypt(obj: any): Despesa {
-    return descriptografarObjeto(obj);
   }
 }
 

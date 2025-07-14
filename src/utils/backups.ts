@@ -7,11 +7,9 @@ import {
 
 const CHAVE_BACKUP_TIMESTAMP = 'ultimoBackupRestaurado';
 
-// Variáveis para guardar os métodos após importação dinâmica
 let exportDB: typeof import('dexie-export-import').exportDB;
 let importInto: typeof import('dexie-export-import').importInto;
 
-/** Importa dinamicamente o módulo dexie-export-import no lado cliente */
 async function carregarDexieExport() {
   if (!exportDB || !importInto) {
     const mod = await import('dexie-export-import');
@@ -20,9 +18,8 @@ async function carregarDexieExport() {
   }
 }
 
-/** Gera o backup atual e envia para o Google Drive */
 export async function fazerBackupParaDrive() {
-  await carregarDexieExport(); // ✅ importa apenas no cliente
+  await carregarDexieExport();
 
   const blob = await exportDB(db, { prettyJson: true });
   const timestamp = Date.now();
@@ -34,12 +31,14 @@ export async function fazerBackupParaDrive() {
   console.log('☁️ Backup enviado para o Google Drive:', nomeArquivo);
 }
 
-/** Restaura os dados do backup mais recente do Google Drive */
 export async function restaurarBackupDoDrive() {
-  await carregarDexieExport(); // ✅ importa apenas no cliente
+  await carregarDexieExport();
 
   const ultimo = await buscarUltimoBackupNoDrive();
-  if (!ultimo) return console.warn('Nenhum backup encontrado no Drive.');
+  if (!ultimo || !ultimo.name || !ultimo.id) {
+    console.warn('⚠️ Backup inválido ou incompleto no Drive.');
+    return;
+  }
 
   const backupTimestamp = extrairTimestampDoNome(ultimo.name);
   const ultimoRestaurado = Number(localStorage.getItem(CHAVE_BACKUP_TIMESTAMP) || 0);
@@ -57,10 +56,9 @@ export async function restaurarBackupDoDrive() {
   }
 }
 
-/** Verifica se há backup mais novo e sincroniza */
 export async function verificarESincronizarBackup() {
   const ultimo = await buscarUltimoBackupNoDrive();
-  if (!ultimo) return;
+  if (!ultimo || !ultimo.name || !ultimo.id) return;
 
   const backupTimestamp = extrairTimestampDoNome(ultimo.name);
   const ultimoRestaurado = Number(localStorage.getItem(CHAVE_BACKUP_TIMESTAMP) || 0);
@@ -71,13 +69,11 @@ export async function verificarESincronizarBackup() {
   }
 }
 
-/** Inicia a verificação automática a cada X minutos */
 export function iniciarSincronizacaoAutomatica(intervaloMinutos = 2) {
-  verificarESincronizarBackup(); // executa no início
+  verificarESincronizarBackup();
   setInterval(verificarESincronizarBackup, intervaloMinutos * 60 * 1000);
 }
 
-/** Extrai o timestamp do nome do arquivo */
 function extrairTimestampDoNome(nome: string): number {
   const regex = /backup-pousada-(\d+)\.json/;
   const match = nome.match(regex);

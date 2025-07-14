@@ -1,3 +1,6 @@
+import 'gapi-script'; 
+declare const gapi: typeof import('gapi-script').gapi;
+
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY!;
 
@@ -107,10 +110,10 @@ export async function salvarArquivoNoDrive(blob: Blob, nomeArquivo: string): Pro
 /**
  * Busca o último arquivo JSON criado no Google Drive
  */
-export async function buscarUltimoBackupNoDrive(): Promise<any | null> {
+export async function buscarUltimoBackupNoDrive(): Promise<gapi.client.drive.File | null> {
   if (typeof window === 'undefined' || typeof gapi === 'undefined') return null;
 
-  const res = await (gapi.client as any).drive.files.list({
+  const res = await gapi.client.drive.files.list({
     q: "mimeType='application/json' and trashed = false",
     orderBy: 'createdTime desc',
     pageSize: 1,
