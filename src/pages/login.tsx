@@ -31,40 +31,45 @@ export default function LoginPage() {
 
   return (
     <Layout semPadding>
-      <div className="h-screen flex flex-col justify-between items-center bg-[#f7f8f8] px-6 py-8">
-        <div className="flex-1 flex flex-col justify-center items-center w-full max-w-md gap-6">
-          <Image
-            src="/logo_pousada.png"
-            alt="Logo da Pousada"
-            width={260}
-            height={140}
-            className="mb-4"
-          />
+      <div
+        className="h-screen w-screen flex items-center justify-center bg-cover bg-center"
+        style={{ backgroundImage: "url('/madeira.jpg')" }}
+      >
+        <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg px-8 py-10 w-full max-w-md flex flex-col items-center gap-6 fade-in-top">
+          <div className="flex-1 flex flex-col justify-center items-center w-full gap-6">
+            <Image
+              src="/logo_pousada.png"
+              alt="Logo da Pousada"
+              width={260}
+              height={140}
+              className="mb-4"
+            />
 
-          <Input
-            label="Usuário"
-            value={nome}
-            onChange={e => setNome(e.target.value)}
-            className="text-black text-lg py-3"
-          />
-          <Input
-            label="Senha"
-            type="password"
-            value={senha}
-            onChange={e => setSenha(e.target.value)}
-            className="text-black text-lg py-3"
-          />
+            <Input
+              label="Usuário"
+              value={nome}
+              onChange={e => setNome(e.target.value)}
+              className="text-black text-lg py-3"
+            />
+            <Input
+              label="Senha"
+              type="password"
+              value={senha}
+              onChange={e => setSenha(e.target.value)}
+              className="text-black text-lg py-3"
+            />
 
-          {erro && <p className="text-red-600 text-base">{erro}</p>}
+            {erro && <p className="text-red-600 text-base">{erro}</p>}
 
-          <div className="w-full flex flex-col items-center gap-2">
-            <Botao texto="Entrar" onClick={handleLogin} />
-            <button
-              onClick={resetarUsuarios}
-              className="text-sm text-blue-600 underline"
-            >
-              Resetar usuários (dev)
-            </button>
+            <div className="w-full flex flex-col items-center gap-2">
+              <Botao texto="Entrar" onClick={handleLogin} />
+              <button
+                onClick={resetarUsuarios}
+                className="text-sm text-blue-600 underline"
+              >
+                Resetar usuários (dev)
+              </button>
+            </div>
           </div>
         </div>
       </div>
