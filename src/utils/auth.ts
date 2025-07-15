@@ -10,7 +10,8 @@ export type Usuario = {
 const CHAVE_ATUAL = 'pousada_usuario_logado'
 
 function salvarUsuarioLocal(usuario: Usuario) {
-  const { senha, ...seguro } = usuario
+  // Remove a senha antes de salvar no localStorage
+  const { senha: _, ...seguro } = usuario
   localStorage.setItem(CHAVE_ATUAL, JSON.stringify(seguro))
 }
 
