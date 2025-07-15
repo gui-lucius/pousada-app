@@ -371,7 +371,7 @@ export default function ComandaDetalhes() {
                     ...sub,
                     itens: sub.itens.map((item) => ({ ...item, pago: true })),
                   })),
-                status: 'paga' as 'paga',
+                status: 'paga' as const
 
                 };
 

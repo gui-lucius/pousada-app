@@ -1,7 +1,7 @@
 import Layout from '@/components/layout/Layout';
 import Botao from '@/components/ui/Botao';
 import { useEffect, useState } from 'react';
-import { db, Consumo, Subcomanda } from '@/utils/db';
+import { db, Consumo } from '@/utils/db'
 import { useRouter } from 'next/router';
 
 export default function ListaComandas() {

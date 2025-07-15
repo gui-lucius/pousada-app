@@ -11,7 +11,7 @@ const CHAVE_ATUAL = 'pousada_usuario_logado'
 
 // 🔒 Nunca salva a senha no localStorage
 function salvarUsuarioLocal(usuario: Usuario) {
-  const { senha, ...seguro } = usuario
+  const { senha: _senha, ...seguro } = usuario
   localStorage.setItem(CHAVE_ATUAL, JSON.stringify(seguro))
 }
 
