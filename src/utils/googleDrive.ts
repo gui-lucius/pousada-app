@@ -1,17 +1,12 @@
-import 'gapi-script'; 
-declare const gapi: typeof import('gapi-script').gapi;
+import { gapi } from 'gapi-script';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY!;
-
 const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'];
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 let gapiLoaded = false;
 
-/**
- * Carrega a API do Google (gapi) e inicializa
- */
 export function carregarApiGoogle(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined') return reject('gapi só pode ser carregado no navegador');
@@ -28,7 +23,6 @@ export function carregarApiGoogle(): Promise<void> {
             discoveryDocs: DISCOVERY_DOCS,
             scope: SCOPES,
           });
-
           gapiLoaded = true;
           resolve();
         } catch (erro) {
@@ -41,9 +35,6 @@ export function carregarApiGoogle(): Promise<void> {
   });
 }
 
-/**
- * Login invisível para liberar acesso ao Google Drive
- */
 export async function loginGoogle(): Promise<gapi.auth2.GoogleUser | null> {
   if (typeof window === 'undefined') return null;
 
@@ -76,9 +67,6 @@ export function estaLogadoGoogle(): boolean {
   return auth?.isSignedIn.get() ?? false;
 }
 
-/**
- * Salva um arquivo JSON no Google Drive
- */
 export async function salvarArquivoNoDrive(blob: Blob, nomeArquivo: string): Promise<string | null> {
   if (typeof window === 'undefined' || typeof gapi === 'undefined') return null;
 
@@ -107,9 +95,6 @@ export async function salvarArquivoNoDrive(blob: Blob, nomeArquivo: string): Pro
   return data.id || null;
 }
 
-/**
- * Busca o último arquivo JSON criado no Google Drive
- */
 export async function buscarUltimoBackupNoDrive(): Promise<gapi.client.drive.File | null> {
   if (typeof window === 'undefined' || typeof gapi === 'undefined') return null;
 
@@ -124,9 +109,6 @@ export async function buscarUltimoBackupNoDrive(): Promise<gapi.client.drive.Fil
   return arquivos && arquivos.length > 0 ? arquivos[0] : null;
 }
 
-/**
- * Baixa um arquivo JSON do Google Drive
- */
 export async function baixarArquivoDoDrive(fileId: string): Promise<Blob | null> {
   if (typeof window === 'undefined' || typeof gapi === 'undefined') return null;
 

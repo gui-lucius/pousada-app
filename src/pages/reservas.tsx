@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Layout from '@/components/layout/Layout'
 import Input from '@/components/ui/Input'
@@ -28,16 +28,7 @@ export default function ReservasPage() {
   const [precos, setPrecos] = useState<PrecosConfig | null>(null)
   const [reservaEditandoId, setReservaEditandoId] = useState<number | null>(null)
 
-  useEffect(() => {
-    db.reservas.toArray().then(setReservas)
-    db.precos.get('config').then((valor) => setPrecos(valor ?? null))
-  }, [])
-
-  useEffect(() => {
-    calcularValor()
-  }, [pessoas, criancas0a3, criancas4a9, comCafe, entrada, saida, precos, usarDesconto, descontoPersonalizado])
-
-  const calcularValor = () => {
+  const calcularValor = useCallback(() => {
     if (!precos || !entrada || !saida) return
 
     const adultos = Math.max(0, Number(pessoas) || 0)
@@ -54,26 +45,15 @@ export default function ReservasPage() {
     let valorDiaria = 0
 
     if (adultos === 1) {
-      valorDiaria = comCafe
-        ? precos.hospedagem.individual.comCafe
-        : precos.hospedagem.individual.semCafe
+      valorDiaria = comCafe ? precos.hospedagem.individual.comCafe : precos.hospedagem.individual.semCafe
     } else if (adultos === 2) {
-      valorDiaria = comCafe
-        ? precos.hospedagem.casal.comCafe
-        : precos.hospedagem.casal.semCafe
+      valorDiaria = comCafe ? precos.hospedagem.casal.comCafe : precos.hospedagem.casal.semCafe
     } else if (adultos === 3) {
-      valorDiaria = comCafe
-        ? precos.hospedagem.tresPessoas.comCafe
-        : precos.hospedagem.tresPessoas.semCafe
+      valorDiaria = comCafe ? precos.hospedagem.tresPessoas.comCafe : precos.hospedagem.tresPessoas.semCafe
     } else if (adultos === 4) {
-      valorDiaria = comCafe
-        ? precos.hospedagem.quatroPessoas.comCafe
-        : precos.hospedagem.quatroPessoas.semCafe
+      valorDiaria = comCafe ? precos.hospedagem.quatroPessoas.comCafe : precos.hospedagem.quatroPessoas.semCafe
     } else if (adultos > 4) {
-      valorDiaria =
-        (comCafe
-          ? precos.hospedagem.maisQuatro.comCafe
-          : precos.hospedagem.maisQuatro.semCafe) * adultos
+      valorDiaria = (comCafe ? precos.hospedagem.maisQuatro.comCafe : precos.hospedagem.maisQuatro.semCafe) * adultos
     }
 
     let total = valorDiaria * diarias
@@ -85,7 +65,17 @@ export default function ReservasPage() {
     }
 
     setValorTotal(Number(total.toFixed(2)))
-  }
+  }, [precos, entrada, saida, pessoas, criancas4a9, comCafe, usarDesconto, descontoPersonalizado])
+
+
+  useEffect(() => {
+    db.reservas.toArray().then(setReservas)
+    db.precos.get('config').then((valor) => setPrecos(valor ?? null))
+  }, [])
+
+  useEffect(() => {
+    calcularValor()
+  }, [calcularValor])
 
   const limparCampos = () => {
     setNome('')

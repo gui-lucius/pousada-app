@@ -3,15 +3,14 @@ import bcrypt from 'bcryptjs'
 
 export type Usuario = {
   nome: string
-  senha: string // agora é o hash
+  senha: string
   permissao: 'super' | 'usuario'
 }
 
 const CHAVE_ATUAL = 'pousada_usuario_logado'
 
-// 🔒 Nunca salva a senha no localStorage
 function salvarUsuarioLocal(usuario: Usuario) {
-  const { senha: _senha, ...seguro } = usuario
+  const { senha, ...seguro } = usuario
   localStorage.setItem(CHAVE_ATUAL, JSON.stringify(seguro))
 }
 
@@ -25,7 +24,6 @@ function carregarUsuarioLocal(): Usuario | null {
   }
 }
 
-// ✅ Criação com senha criptografada
 export async function criarUsuario(usuario: Usuario) {
   if (typeof window === 'undefined') return
   if (!usuario.nome || !usuario.senha) return
@@ -40,7 +38,6 @@ export async function criarUsuario(usuario: Usuario) {
   }
 }
 
-// ✅ Login com comparação do hash
 export async function fazerLogin(nome: string, senhaDigitada: string): Promise<Usuario | null> {
   if (typeof window === 'undefined') return null
 

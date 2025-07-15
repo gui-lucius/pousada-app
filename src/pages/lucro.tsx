@@ -47,13 +47,12 @@ export default function LucroPage() {
 
   useEffect(() => {
     filtrosRapidos.hoje()
-  }, [])
+  }, [filtrosRapidos])
 
   useEffect(() => {
     if (!inicio || !fim) return
 
     const carregar = async () => {
-      // ✅ Aqui usamos UTC fixo na data para evitar erros de fuso
       const dataInicio = new Date(`${inicio}T00:00:00.000Z`)
       const dataFim = new Date(`${fim}T23:59:59.999Z`)
 
@@ -66,7 +65,6 @@ export default function LucroPage() {
         db.despesas.toArray()
       ])
 
-      // ✅ Faturamento por hospedagem (checkouts)
       checkouts.forEach(c => {
         const data = new Date(c.data)
         if (data >= dataInicio && data <= dataFim) {
@@ -74,7 +72,6 @@ export default function LucroPage() {
         }
       })
 
-      // ✅ Faturamento por comandas
       consumos.forEach(c => {
         const data = new Date(c.criadoEm)
         if (data >= dataInicio && data <= dataFim) {
@@ -88,7 +85,6 @@ export default function LucroPage() {
         }
       })
 
-      // ✅ Despesas
       despesasLista.forEach(d => {
         const data = new Date(d.data)
         if (data >= dataInicio && data <= dataFim) {
@@ -108,8 +104,6 @@ export default function LucroPage() {
   return (
     <Layout title="📈 Lucro">
       <div className="max-w-3xl mx-auto px-4 space-y-6 text-black">
-
-        {/* Botões de filtros rápidos */}
         <div className="flex flex-wrap gap-3 justify-center">
           <button onClick={() => { filtrosRapidos.hoje(); setModo('rapido') }} className="bg-blue-600 text-white px-4 py-2 rounded shadow">Hoje</button>
           <button onClick={() => { filtrosRapidos.ultimos7(); setModo('rapido') }} className="bg-blue-600 text-white px-4 py-2 rounded shadow">Últimos 7 dias</button>
@@ -118,7 +112,6 @@ export default function LucroPage() {
           <button onClick={() => setModo('personalizado')} className="bg-gray-300 text-black px-4 py-2 rounded shadow">Personalizado</button>
         </div>
 
-        {/* Filtro personalizado */}
         {modo === 'personalizado' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -132,7 +125,6 @@ export default function LucroPage() {
           </div>
         )}
 
-        {/* Resultado do lucro */}
         <div className="bg-white p-6 rounded shadow border space-y-4 text-lg font-medium">
           <p className="text-blue-700">💰 Faturamento no período: <strong>R$ {faturamento.toFixed(2)}</strong></p>
           <p className="text-red-700">📉 Despesas no período: <strong>R$ {despesas.toFixed(2)}</strong></p>
