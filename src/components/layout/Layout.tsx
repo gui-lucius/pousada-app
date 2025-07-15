@@ -62,6 +62,7 @@ export default function Layout({ children, title = 'Pousada App', semPadding }: 
             {user?.permissao === 'super' && (
               <>
                 <Link href="/faturamento" className="hover:underline">Faturamento</Link>
+                <Link href="/lucro" className="hover:underline">Lucro</Link>
                 <Link href="/precos" className="hover:underline">Preços</Link>
                 <Link href="/despesas" className="hover:underline">Despesas</Link>
                 <Link href="/admin" className="hover:underline">Gestão de Usuários</Link>

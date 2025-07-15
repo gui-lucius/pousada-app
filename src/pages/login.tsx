@@ -1,33 +1,43 @@
-import { useState } from 'react';
-import { useRouter } from 'next/router';
-import Layout from '@/components/layout/Layout';
-import Input from '@/components/ui/Input';
-import Botao from '@/components/ui/Botao';
-import { fazerLogin, criarUsuario } from '@/utils/auth';
-import Image from 'next/image';
+import { useState } from 'react'
+import { useRouter } from 'next/router'
+import Layout from '@/components/layout/Layout'
+import Input from '@/components/ui/Input'
+import Botao from '@/components/ui/Botao'
+import { fazerLogin, criarUsuario } from '@/utils/auth'
+import { db } from '@/utils/db'
+import Image from 'next/image'
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [nome, setNome] = useState('');
-  const [senha, setSenha] = useState('');
-  const [erro, setErro] = useState('');
+  const router = useRouter()
+  const [nome, setNome] = useState('')
+  const [senha, setSenha] = useState('')
+  const [erro, setErro] = useState('')
 
   const handleLogin = async () => {
-    setErro('');
+    setErro('')
 
-    const usuario = await fazerLogin(nome, senha);
+    const usuario = await fazerLogin(nome, senha)
 
     if (usuario) {
-      router.push('/checkin');
+      router.push('/checkin')
     } else {
-      setErro('Usuário ou senha inválidos!');
+      setErro('Usuário ou senha inválidos!')
     }
-  };
+  }
 
   const resetarUsuarios = async () => {
-    await criarUsuario({ nome: 'admin', senha: '1234', permissao: 'super' });
-    alert('Usuário admin criado! Use admin / 1234');
-  };
+    if (!confirm('⚠️ Isso vai apagar todos os usuários e recriar o admin. Continuar?')) return
+
+    await db.usuarios.clear()
+
+    await criarUsuario({
+      nome: 'admin',
+      senha: '1234',
+      permissao: 'super'
+    })
+
+    alert('✅ Usuário admin recriado com sucesso!\n\nUse:\nUsuário: admin\nSenha: 1234')
+  }
 
   return (
     <Layout semPadding>
@@ -74,5 +84,5 @@ export default function LoginPage() {
         </div>
       </div>
     </Layout>
-  );
+  )
 }

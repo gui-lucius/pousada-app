@@ -1,15 +1,18 @@
 import { db } from './db'
+import bcrypt from 'bcryptjs'
 
 export type Usuario = {
   nome: string
-  senha: string
+  senha: string // agora é o hash
   permissao: 'super' | 'usuario'
 }
 
 const CHAVE_ATUAL = 'pousada_usuario_logado'
 
+// 🔒 Nunca salva a senha no localStorage
 function salvarUsuarioLocal(usuario: Usuario) {
-  localStorage.setItem(CHAVE_ATUAL, JSON.stringify(usuario))
+  const { senha, ...seguro } = usuario
+  localStorage.setItem(CHAVE_ATUAL, JSON.stringify(seguro))
 }
 
 function carregarUsuarioLocal(): Usuario | null {
@@ -22,33 +25,32 @@ function carregarUsuarioLocal(): Usuario | null {
   }
 }
 
+// ✅ Criação com senha criptografada
 export async function criarUsuario(usuario: Usuario) {
   if (typeof window === 'undefined') return
-
   if (!usuario.nome || !usuario.senha) return
 
   const existente = await db.usuarios.get(usuario.nome)
   if (!existente) {
-    await db.usuarios.add(usuario)
+    const hash = await bcrypt.hash(usuario.senha, 10)
+    await db.usuarios.add({
+      ...usuario,
+      senha: hash
+    })
   }
 }
 
-export async function fazerLogin(nome: string, senha: string): Promise<Usuario | null> {
+// ✅ Login com comparação do hash
+export async function fazerLogin(nome: string, senhaDigitada: string): Promise<Usuario | null> {
   if (typeof window === 'undefined') return null
 
-  const usuarios = await db.usuarios.toArray()
+  const usuario = await db.usuarios.get(nome)
+  if (!usuario) return null
 
-  if (usuarios.length === 0) {
-    const adminPadrao: Usuario = { nome: 'admin', senha: '1234', permissao: 'super' }
-    await db.usuarios.add(adminPadrao)
-    salvarUsuarioLocal(adminPadrao)
-    return adminPadrao
-  }
-
-  const user = usuarios.find(u => u.nome === nome && u.senha === senha)
-  if (user) {
-    salvarUsuarioLocal(user)
-    return user
+  const senhaCorreta = await bcrypt.compare(senhaDigitada, usuario.senha)
+  if (senhaCorreta) {
+    salvarUsuarioLocal(usuario)
+    return usuario
   }
 
   return null

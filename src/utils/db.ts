@@ -1,5 +1,9 @@
 import Dexie, { Table } from 'dexie';
 import { Usuario as UsuarioTipo } from './auth';
+import {
+  criptografarObjeto,
+  descriptografarObjeto
+} from './criptografia'; // ← NOVO
 
 export interface Reserva {
   id: number;
@@ -70,7 +74,6 @@ export interface Consumo {
   criadoEm: string;
 }
 
-// ✅ Tornando o campo `id` opcional para uso com `add()`
 export interface Checkout {
   id?: number;
   nome: string;
@@ -138,11 +141,11 @@ export interface PrecosConfig {
 }
 
 class PousadaDB extends Dexie {
-  reservas!: Table<Reserva, number>;
-  checkins!: Table<CheckIn, number>;
+  reservas!: Table<any, number>;
+  checkins!: Table<any, number>;
+  despesas!: Table<any, string>;
   consumos!: Table<Consumo, number>;
   checkouts!: Table<Checkout, number>;
-  despesas!: Table<Despesa, string>;
   precos!: Table<PrecosConfig, string>;
   produtos!: Table<ProdutoComanda, string>;
   usuarios!: Table<UsuarioTipo, string>;
@@ -159,6 +162,41 @@ class PousadaDB extends Dexie {
       produtos: 'id, categoria, nome, tipoUsavelEmComanda',
       usuarios: 'nome',
     });
+
+    this.reservas.mapToClass(ReservaCripto);
+    this.checkins.mapToClass(CheckinCripto);
+    this.despesas.mapToClass(DespesaCripto);
+  }
+}
+
+// 🧠 Classes intermediárias para salvar os dados criptografados
+class ReservaCripto {
+  static encrypt(obj: Reserva) {
+    return criptografarObjeto(obj);
+  }
+
+  static decrypt(obj: any): Reserva {
+    return descriptografarObjeto(obj);
+  }
+}
+
+class CheckinCripto {
+  static encrypt(obj: CheckIn) {
+    return criptografarObjeto(obj);
+  }
+
+  static decrypt(obj: any): CheckIn {
+    return descriptografarObjeto(obj);
+  }
+}
+
+class DespesaCripto {
+  static encrypt(obj: Despesa) {
+    return criptografarObjeto(obj);
+  }
+
+  static decrypt(obj: any): Despesa {
+    return descriptografarObjeto(obj);
   }
 }
 
