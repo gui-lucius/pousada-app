@@ -9,7 +9,7 @@ export function useProtegido() {
     if (!estaLogado()) {
       router.push('/login');
     }
-  }, []);
+  }, [router]); // ✅ dependência adicionada
 }
 
 export function useApenasAdmin() {
@@ -19,5 +19,5 @@ export function useApenasAdmin() {
     if (!estaLogado() || !isAdmin()) {
       router.push('/login');
     }
-  }, []);
+  }, [router]); // ✅ dependência adicionada
 }

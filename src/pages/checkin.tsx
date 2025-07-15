@@ -78,41 +78,50 @@ export default function CheckInPage() {
   }, [query])
 
   useEffect(() => {
-    if (!precos || !entrada || !saida || query.valor) return
+    if (!precos || !entrada || !saida || query.valor) return;
 
-    const inicio = new Date(entrada)
-    const fim = new Date(saida)
-    const dias = Math.ceil((+fim - +inicio) / (1000 * 60 * 60 * 24))
-    if (dias <= 0) return
+    const inicio = new Date(entrada);
+    const fim = new Date(saida);
+    const dias = Math.ceil((+fim - +inicio) / (1000 * 60 * 60 * 24));
+    if (dias <= 0) return;
 
-    let total = 0
-    const nAdultos = parseInt(adultos || '0')
-    const c03 = parseInt(criancas0a3 || '0')
-    const c49 = parseInt(criancas4a9 || '0')
+    let total = 0;
+    const nAdultos = parseInt(adultos || '0');
+    const c49 = parseInt(criancas4a9 || '0'); // ✅ Apenas 4 a 9 anos entra no cálculo
 
-    const precoAdulto = precos.hospedagem.maisQuatro.comCafe
-    const precoCrianca4a9 = precos.hospedagem.criancas.de4a9
+    const precoAdulto = precos.hospedagem.maisQuatro.comCafe;
+    const precoCrianca4a9 = precos.hospedagem.criancas.de4a9;
 
-    total += (nAdultos * precoAdulto + c49 * precoCrianca4a9) * dias
+    total += (nAdultos * precoAdulto + c49 * precoCrianca4a9) * dias;
 
     if (
       usarDesconto &&
       precos.hospedagem.descontoReserva?.aplicar &&
       dias >= precos.hospedagem.descontoReserva.minDiarias
     ) {
-      total *= 1 - precos.hospedagem.descontoReserva.percentual / 100
+      total *= 1 - precos.hospedagem.descontoReserva.percentual / 100;
     }
 
     if (descontoPersonalizado) {
-      const perc = parseFloat(descontoPersonalizado)
-      total *= 1 - perc / 100
+      const perc = parseFloat(descontoPersonalizado);
+      total *= 1 - perc / 100;
     }
 
-    setValor(total.toFixed(2))
-  }, [usarDesconto, entrada, saida, precos, adultos, criancas0a3, criancas4a9, descontoPersonalizado])
+    setValor(total.toFixed(2));
+  }, [
+    usarDesconto,
+    entrada,
+    saida,
+    precos,
+    adultos,
+    criancas0a3,
+    criancas4a9,
+    descontoPersonalizado,
+    query.valor, // ✅ Dependência adicionada
+  ]);
 
-    const handleSalvar = async () => {
-    const checkinId = Date.now()
+  const handleSalvar = async () => {
+    const checkinId = Date.now();
 
     const novo: CheckInModel = {
       id: checkinId,
@@ -138,20 +147,20 @@ export default function CheckInPage() {
       adultos,
       criancas0a3,
       criancas4a9,
-      descontoPersonalizado
-    }
+      descontoPersonalizado,
+    };
 
-    await db.checkins.add(novo)
+    await db.checkins.add(novo);
 
-    const dataCriacao = new Date().toISOString()
-    const subcomandas: Subcomanda[] = []
+    const dataCriacao = new Date().toISOString();
+    const subcomandas: Subcomanda[] = [];
 
     subcomandas.push({
       id: `hospede-${Date.now()}`,
       nome: nome,
       itens: [],
-      total: 0
-    })
+      total: 0,
+    });
 
     for (const a of acompanhantes) {
       if (a.criarComanda) {

@@ -22,7 +22,17 @@ export default function Input({
     if (prefixoMonetario && isNumero && props.onChange) {
       const num = Number(e.target.value);
       const positivo = Math.max(0, num);
-      props.onChange({ ...e, target: { ...e.target, value: positivo.toString() } } as any);
+
+      // Criando um novo evento com target atualizado
+      const customEvent: React.ChangeEvent<HTMLInputElement> = {
+        ...e,
+        target: {
+          ...e.target,
+          value: positivo.toString(),
+        },
+      };
+
+      props.onChange(customEvent);
     } else {
       props.onChange?.(e);
     }

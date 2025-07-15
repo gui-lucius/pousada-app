@@ -17,6 +17,14 @@ interface Ocupacao {
   status: 'reservado' | 'ocupado';
 }
 
+interface ReservaOuCheckin {
+  chale: string;
+  dataEntrada?: string;
+  dataSaida?: string;
+  entrada?: string;
+  saida?: string;
+}
+
 export default function CalendarioPage() {
   const [mesAtual, setMesAtual] = useState(new Date());
   const [ocupacoes, setOcupacoes] = useState<Ocupacao[]>([]);
@@ -26,10 +34,13 @@ export default function CalendarioPage() {
       const reservas = await db.reservas.toArray();
       const checkins = await db.checkins.toArray();
 
-      const toOcupacao = (item: any, status: 'reservado' | 'ocupado'): Ocupacao | null => {
+      const toOcupacao = (
+        item: ReservaOuCheckin,
+        status: 'reservado' | 'ocupado'
+      ): Ocupacao | null => {
         try {
-          const entrada = new Date(item.dataEntrada || item.entrada);
-          const saida = new Date(item.dataSaida || item.saida);
+          const entrada = new Date(item.dataEntrada || item.entrada || '');
+          const saida = new Date(item.dataSaida || item.saida || '');
           return {
             chale: item.chale,
             de: entrada.getDate(),

@@ -2,7 +2,7 @@
 
 import Layout from '@/components/layout/Layout'
 import { useApenasAdmin } from '@/utils/proteger'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { db, Checkout, Consumo } from '@/utils/db'
 
 type ItemResumo = {
@@ -16,41 +16,22 @@ type CategoriaResumo = {
   itens: ItemResumo[]
 }
 
-export default function FaturamentoPage() {
-  useApenasAdmin()
-
-  const [inicio, setInicio] = useState('')
-  const [fim, setFim] = useState('')
-  const [modo, setModo] = useState<'rapido' | 'personalizado'>('rapido')
-  const [categorias, setCategorias] = useState<CategoriaResumo[]>([])
-  const [totalGeral, setTotalGeral] = useState(0)
-
-  const [filtroCategoria, setFiltroCategoria] = useState('')
-  const [filtroItem, setFiltroItem] = useState('')
-
-  const aplicarFiltro = (inicioStr: string, fimStr: string) => {
-    setInicio(inicioStr)
-    setFim(fimStr)
-  }
-
-  const filtrosRapidos = {
+// 🔧 Agora isso é uma função fora do componente para evitar warning de dependência
+function criarFiltrosRapidos(aplicarFiltro: (inicio: string, fim: string) => void) {
+  return {
     hoje: () => {
       const inicio = new Date()
       inicio.setHours(0, 0, 0, 0)
-
       const fim = new Date()
       fim.setHours(23, 59, 59, 999)
-
       aplicarFiltro(inicio.toISOString(), fim.toISOString())
     },
     ultimos7: () => {
       const inicio = new Date()
       inicio.setDate(inicio.getDate() - 6)
       inicio.setHours(0, 0, 0, 0)
-
       const fim = new Date()
       fim.setHours(23, 59, 59, 999)
-
       aplicarFiltro(inicio.toISOString(), fim.toISOString())
     },
     mes: () => {
@@ -61,21 +42,38 @@ export default function FaturamentoPage() {
       const fim = new Date(ano, mes + 1, 0)
       inicio.setHours(0, 0, 0, 0)
       fim.setHours(23, 59, 59, 999)
-
       aplicarFiltro(inicio.toISOString(), fim.toISOString())
     },
     ano: () => {
       const ano = new Date().getFullYear()
       const inicio = new Date(`${ano}-01-01T00:00:00`)
       const fim = new Date(`${ano}-12-31T23:59:59.999`)
-
       aplicarFiltro(inicio.toISOString(), fim.toISOString())
-    }
+    },
   }
+}
+
+export default function FaturamentoPage() {
+  useApenasAdmin()
+
+  const [inicio, setInicio] = useState('')
+  const [fim, setFim] = useState('')
+  const [modo, setModo] = useState<'rapido' | 'personalizado'>('rapido')
+  const [categorias, setCategorias] = useState<CategoriaResumo[]>([])
+  const [totalGeral, setTotalGeral] = useState(0)
+  const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [filtroItem, setFiltroItem] = useState('')
+
+  const aplicarFiltro = useCallback((inicioStr: string, fimStr: string) => {
+    setInicio(inicioStr)
+    setFim(fimStr)
+  }, [])
+
+  const filtrosRapidos = criarFiltrosRapidos(aplicarFiltro)
 
   useEffect(() => {
     filtrosRapidos.hoje()
-  }, [])
+  }, [filtrosRapidos])
 
   useEffect(() => {
     if (!inicio || !fim) return
@@ -90,7 +88,6 @@ export default function FaturamentoPage() {
       const resumo: Record<string, Record<string, { quantidade: number; total: number }>> = {}
       let total = 0
 
-      // ✅ Hospedagem
       checkouts.forEach((c: Checkout) => {
         const data = new Date(c.data)
         if (data < dataInicio || data > dataFim) return
@@ -108,7 +105,6 @@ export default function FaturamentoPage() {
         total += c.valor
       })
 
-      // ✅ Itens pagos das comandas
       consumos.forEach((consumo: Consumo) => {
         const data = new Date(consumo.criadoEm)
         if (data < dataInicio || data > dataFim) return
@@ -137,8 +133,8 @@ export default function FaturamentoPage() {
         itens: Object.entries(itens).map(([itemNome, dados]) => ({
           nome: itemNome,
           quantidade: dados.quantidade,
-          total: dados.total
-        }))
+          total: dados.total,
+        })),
       }))
 
       setCategorias(categoriasFormatadas)
@@ -148,23 +144,20 @@ export default function FaturamentoPage() {
     carregarDados()
   }, [inicio, fim])
 
-  // 🎯 Aplicar filtros de categoria e item
   const categoriasFiltradas = categorias
     .filter(c => !filtroCategoria || c.nome === filtroCategoria)
     .map(c => ({
       ...c,
-      itens: c.itens.filter(i => !filtroItem || i.nome === filtroItem)
+      itens: c.itens.filter(i => !filtroItem || i.nome === filtroItem),
     }))
     .filter(c => c.itens.length > 0)
 
-  // 🧠 Listas únicas de categorias e itens
   const opcoesCategorias = categorias.map(c => c.nome)
   const opcoesItens = [...new Set(categorias.flatMap(c => c.itens.map(i => i.nome)))].sort()
 
   return (
     <Layout title="📊 Faturamento">
       <div className="max-w-4xl mx-auto px-4 space-y-6 text-black">
-        {/* Botões rápidos */}
         <div className="flex flex-wrap gap-3 justify-center">
           <button onClick={() => { filtrosRapidos.hoje(); setModo('rapido') }} className="bg-blue-600 text-white px-4 py-2 rounded shadow">Hoje</button>
           <button onClick={() => { filtrosRapidos.ultimos7(); setModo('rapido') }} className="bg-blue-600 text-white px-4 py-2 rounded shadow">Últimos 7 dias</button>
@@ -173,7 +166,6 @@ export default function FaturamentoPage() {
           <button onClick={() => setModo('personalizado')} className="bg-gray-300 text-black px-4 py-2 rounded shadow">Personalizado</button>
         </div>
 
-        {/* Filtro por data */}
         {modo === 'personalizado' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -187,7 +179,6 @@ export default function FaturamentoPage() {
           </div>
         )}
 
-        {/* Filtros de categoria e item */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Filtrar por Categoria</label>
@@ -209,7 +200,6 @@ export default function FaturamentoPage() {
           </div>
         </div>
 
-        {/* Resultados por categoria */}
         {categoriasFiltradas.map((cat, idx) => (
           <div key={idx} className="bg-white p-4 border rounded shadow space-y-2">
             <h3 className="text-lg font-semibold">{cat.nome}</h3>
@@ -234,7 +224,6 @@ export default function FaturamentoPage() {
           </div>
         ))}
 
-        {/* Total geral */}
         <div className="text-center text-xl font-bold text-green-700">
           💰 Total Geral: R$ {totalGeral.toFixed(2)}
         </div>

@@ -119,9 +119,7 @@ export default function ComandaDetalhes() {
     return <Layout title="Carregando...">Carregando comanda...</Layout>;
   }
 
-  const todosItensPagos = comanda.subcomandas.every((sub) =>
-    sub.itens.every((item) => item.pago)
-  );
+  
 
   return (
     <Layout title={`🧾 Comanda do ${comanda.cliente}`}>
@@ -206,7 +204,8 @@ export default function ComandaDetalhes() {
             <h2 className="text-lg font-semibold">2️⃣ Escolha a Categoria</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {Object.entries(precos.categoriasExtras)
-                .filter(([_, cat]) => cat.usarEmComanda)
+                .filter(([, cat]) => cat.usarEmComanda)
+
                 .map(([nome, cat]) => (
                   <button
                     key={nome}

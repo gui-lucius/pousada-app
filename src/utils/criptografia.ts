@@ -25,12 +25,12 @@ export function descriptografar(textoCriptografado: string): string {
 /**
  * Criptografa todos os campos string de um objeto
  */
-export function criptografarObjeto<T extends Record<string, any>>(obj: T): T {
-  const resultado: any = {};
+export function criptografarObjeto<T extends object>(obj: T): T {
+  const resultado = {} as T;
 
   for (const chave in obj) {
-    const valor = obj[chave];
-    resultado[chave] = typeof valor === 'string' ? criptografar(valor) : valor;
+    const valor = obj[chave as keyof T];
+    (resultado as any)[chave] = typeof valor === 'string' ? criptografar(valor) : valor;
   }
 
   return resultado;
@@ -39,12 +39,12 @@ export function criptografarObjeto<T extends Record<string, any>>(obj: T): T {
 /**
  * Descriptografa todos os campos string de um objeto
  */
-export function descriptografarObjeto<T extends Record<string, any>>(obj: T): T {
-  const resultado: any = {};
+export function descriptografarObjeto<T extends object>(obj: T): T {
+  const resultado = {} as T;
 
   for (const chave in obj) {
-    const valor = obj[chave];
-    resultado[chave] = typeof valor === 'string' ? descriptografar(valor) : valor;
+    const valor = obj[chave as keyof T];
+    (resultado as any)[chave] = typeof valor === 'string' ? descriptografar(valor) : valor;
   }
 
   return resultado;
