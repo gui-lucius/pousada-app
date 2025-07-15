@@ -7,11 +7,15 @@ export type Usuario = {
   permissao: 'super' | 'usuario'
 }
 
+type UsuarioSemSenha = Omit<Usuario, 'senha'>
+
 const CHAVE_ATUAL = 'pousada_usuario_logado'
 
 function salvarUsuarioLocal(usuario: Usuario) {
-  // Remove a senha antes de salvar no localStorage
-  const { senha: _, ...seguro } = usuario
+  const seguro: UsuarioSemSenha = {
+    nome: usuario.nome,
+    permissao: usuario.permissao,
+  }
   localStorage.setItem(CHAVE_ATUAL, JSON.stringify(seguro))
 }
 
