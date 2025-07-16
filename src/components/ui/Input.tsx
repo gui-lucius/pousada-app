@@ -23,7 +23,6 @@ export default function Input({
       const num = Number(e.target.value);
       const positivo = Math.max(0, num);
 
-      // Criando um novo evento com target atualizado
       const customEvent: React.ChangeEvent<HTMLInputElement> = {
         ...e,
         target: {
