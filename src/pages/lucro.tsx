@@ -47,7 +47,9 @@ export default function LucroPage() {
 
   useEffect(() => {
     filtrosRapidos.hoje()
-  }, [filtrosRapidos])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
 
   useEffect(() => {
     if (!inicio || !fim) return

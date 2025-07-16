@@ -1,6 +1,6 @@
 import { logout } from './auth';
 
-const LIMITE_MINUTOS = 10; // ⏱ Tempo limite de inatividade
+const LIMITE_MINUTOS = 10; 
 const CHAVE_STORAGE = 'lastActiveAt';
 
 let intervaloMonitoramento: ReturnType<typeof setInterval> | null = null;
@@ -12,12 +12,11 @@ export function registrarAtividade() {
 export function iniciarMonitoramentoInatividade() {
   if (typeof window === 'undefined') return;
 
-  // Eventos que "renovam" a atividade
   ['click', 'mousemove', 'keydown'].forEach(evento =>
     window.addEventListener(evento, registrarAtividade)
   );
 
-  registrarAtividade(); // Marca o tempo de entrada
+  registrarAtividade();
 
   intervaloMonitoramento = setInterval(() => {
     const ultimo = localStorage.getItem(CHAVE_STORAGE);
@@ -31,7 +30,7 @@ export function iniciarMonitoramentoInatividade() {
       logout();
       window.location.href = '/login';
     }
-  }, 60 * 1000); // Verifica a cada 1 minuto
+  }, 60 * 1000); 
 }
 
 export function pararMonitoramentoInatividade() {

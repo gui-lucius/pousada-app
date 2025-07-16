@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { db } from '@/utils/db';
 import { useApenasAdmin } from '@/utils/proteger';
 import { usuarioAtual } from '@/utils/auth';
-import bcrypt from 'bcryptjs'; // ✅ Importado para hashear senha
+import bcrypt from 'bcryptjs'; 
 
 type Usuario = {
   nome: string;
@@ -48,7 +48,6 @@ export default function AdminPage() {
     if (editando !== null) {
       const usuarioOriginal = usuarios[editando];
 
-      // Se a senha for diferente da antiga, re-hash
       const mesmaSenha = await bcrypt.compare(form.senha, usuarioOriginal.senha);
       const novaSenha = mesmaSenha ? usuarioOriginal.senha : senhaCriptografada;
 
@@ -68,7 +67,7 @@ export default function AdminPage() {
   };
 
   const handleEditar = (index: number) => {
-    setForm({ ...usuarios[index], senha: '' }); // ⚠️ Limpar senha visível
+    setForm({ ...usuarios[index], senha: '' }); 
     setEditando(index);
     setMostrandoFormulario(true);
   };

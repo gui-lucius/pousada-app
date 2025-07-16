@@ -28,7 +28,7 @@ export default function ListaComandas() {
     const novaComanda: Consumo = {
       id: timestamp,
       cliente: nome.trim(),
-      checkinId: 0, // número válido
+      checkinId: 0, 
       hospede: tipo === 'hospede',
       status: 'aberta',
       criadoEm: new Date().toISOString(),

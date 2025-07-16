@@ -47,7 +47,6 @@ export interface CheckIn {
   chale: string;
   valor: string;
 
-  // ✅ Campos adicionados para cálculo por hóspede
   valorEntrada?: string;
   adultos?: string;
   criancas0a3?: string;

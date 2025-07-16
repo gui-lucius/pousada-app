@@ -1,4 +1,4 @@
-import { gapi } from 'gapi-script';
+let gapi: typeof import('gapi-script').gapi;
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY!;
@@ -7,11 +7,20 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 let gapiLoaded = false;
 
-export function carregarApiGoogle(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') return reject('gapi só pode ser carregado no navegador');
-    if (gapiLoaded) return resolve();
+async function carregarGapiScript() {
+  if (!gapi) {
+    const mod = await import('gapi-script');
+    gapi = mod.gapi;
+  }
+}
 
+export async function carregarApiGoogle(): Promise<void> {
+  if (typeof window === 'undefined') throw new Error('gapi só pode ser carregado no navegador');
+  if (gapiLoaded) return;
+
+  await carregarGapiScript();
+
+  return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = 'https://apis.google.com/js/api.js';
     script.onload = () => {
@@ -68,7 +77,7 @@ export function estaLogadoGoogle(): boolean {
 }
 
 export async function salvarArquivoNoDrive(blob: Blob, nomeArquivo: string): Promise<string | null> {
-  if (typeof window === 'undefined' || typeof gapi === 'undefined') return null;
+  if (typeof window === 'undefined' || !gapi) return null;
 
   const metadata = {
     name: nomeArquivo,
@@ -96,7 +105,7 @@ export async function salvarArquivoNoDrive(blob: Blob, nomeArquivo: string): Pro
 }
 
 export async function buscarUltimoBackupNoDrive(): Promise<gapi.client.drive.File | null> {
-  if (typeof window === 'undefined' || typeof gapi === 'undefined') return null;
+  if (typeof window === 'undefined' || !gapi) return null;
 
   const res = await gapi.client.drive.files.list({
     q: "mimeType='application/json' and trashed = false",
@@ -110,7 +119,7 @@ export async function buscarUltimoBackupNoDrive(): Promise<gapi.client.drive.Fil
 }
 
 export async function baixarArquivoDoDrive(fileId: string): Promise<Blob | null> {
-  if (typeof window === 'undefined' || typeof gapi === 'undefined') return null;
+  if (typeof window === 'undefined' || !gapi) return null;
 
   const token = gapi.auth.getToken().access_token;
   const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {

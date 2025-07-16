@@ -192,7 +192,7 @@ export default function ReservasPage() {
                           entrada: r.dataEntrada,
                           saida: r.dataSaida,
                           valor: r.valor,
-                          valorEntrada: r.valorEntrada ?? '0', // 👈 ADICIONA ESSA LINHA
+                          valorEntrada: r.valorEntrada ?? '0',
                         }).toString()
                         router.push(`/checkin?${query}`)
                       }}

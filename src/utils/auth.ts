@@ -1,77 +1,80 @@
-import { db } from './db'
-import bcrypt from 'bcryptjs'
+import { db } from './db';
+import bcrypt from 'bcryptjs';
 
 export type Usuario = {
-  nome: string
-  senha: string
-  permissao: 'super' | 'usuario'
-}
+  nome: string;
+  senha: string;
+  permissao: 'super' | 'usuario';
+};
 
-type UsuarioSemSenha = Omit<Usuario, 'senha'>
+type UsuarioSemSenha = Omit<Usuario, 'senha'>;
 
-const CHAVE_ATUAL = 'pousada_usuario_logado'
+const CHAVE_ATUAL = 'pousada_usuario_logado';
 
 function salvarUsuarioLocal(usuario: Usuario) {
   const seguro: UsuarioSemSenha = {
     nome: usuario.nome,
     permissao: usuario.permissao,
-  }
-  localStorage.setItem(CHAVE_ATUAL, JSON.stringify(seguro))
+  };
+  localStorage.setItem(CHAVE_ATUAL, JSON.stringify(seguro));
 }
 
-function carregarUsuarioLocal(): Usuario | null {
+function carregarUsuarioLocal(): UsuarioSemSenha | null {
   try {
-    const raw = localStorage.getItem(CHAVE_ATUAL)
-    if (!raw) return null
-    return JSON.parse(raw)
+    const raw = localStorage.getItem(CHAVE_ATUAL);
+    if (!raw) return null;
+    return JSON.parse(raw);
   } catch {
-    return null
+    return null;
   }
 }
 
 export async function criarUsuario(usuario: Usuario) {
-  if (typeof window === 'undefined') return
-  if (!usuario.nome || !usuario.senha) return
+  if (typeof window === 'undefined') return;
+  if (!usuario.nome || !usuario.senha) return;
 
-  const existente = await db.usuarios.get(usuario.nome)
+  const existente = await db.usuarios.get(usuario.nome);
   if (!existente) {
-    const hash = await bcrypt.hash(usuario.senha, 10)
+    const hash = await bcrypt.hash(usuario.senha, 10);
     await db.usuarios.add({
       ...usuario,
-      senha: hash
-    })
+      senha: hash,
+    });
   }
 }
 
-export async function fazerLogin(nome: string, senhaDigitada: string): Promise<Usuario | null> {
-  if (typeof window === 'undefined') return null
+export async function fazerLogin(nome: string, senhaDigitada: string): Promise<UsuarioSemSenha | null> {
+  if (typeof window === 'undefined') return null;
 
-  const usuario = await db.usuarios.get(nome)
-  if (!usuario) return null
+  const usuario = await db.usuarios.get(nome);
+  if (!usuario) return null;
 
-  const senhaCorreta = await bcrypt.compare(senhaDigitada, usuario.senha)
+  const senhaCorreta = await bcrypt.compare(senhaDigitada, usuario.senha);
   if (senhaCorreta) {
-    salvarUsuarioLocal(usuario)
-    return usuario
+    salvarUsuarioLocal(usuario);
+    return {
+      nome: usuario.nome,
+      permissao: usuario.permissao,
+    };
   }
 
-  return null
+  return null;
 }
 
-export function usuarioAtual(): Usuario | null {
-  if (typeof window === 'undefined') return null
-  return carregarUsuarioLocal()
+export function usuarioAtual(): UsuarioSemSenha | null {
+  if (typeof window === 'undefined') return null;
+  return carregarUsuarioLocal();
 }
 
 export function isAdmin(): boolean {
-  return usuarioAtual()?.permissao === 'super'
+  return usuarioAtual()?.permissao === 'super';
 }
 
 export function estaLogado(): boolean {
-  return !!usuarioAtual()
+  return !!usuarioAtual();
 }
 
 export function logout() {
-  if (typeof window === 'undefined') return
-  localStorage.removeItem(CHAVE_ATUAL)
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(CHAVE_ATUAL);
 }

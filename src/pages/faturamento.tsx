@@ -16,7 +16,6 @@ type CategoriaResumo = {
   itens: ItemResumo[]
 }
 
-// 🔧 Agora isso é uma função fora do componente para evitar warning de dependência
 function criarFiltrosRapidos(aplicarFiltro: (inicio: string, fim: string) => void) {
   return {
     hoje: () => {

@@ -30,7 +30,6 @@ export default function CheckoutPage() {
       await db.consumos.put(comanda)
     }
 
-    // ✅ Registrar hospedagem no db.checkouts
     const valorTotalHospedagem = Number(checkin.valor || 0)
     await db.checkouts.add({
       data: new Date().toISOString(),
@@ -39,7 +38,6 @@ export default function CheckoutPage() {
       valor: valorTotalHospedagem
     })
 
-    // 🗑️ Remover o check-in após o registro
     await db.checkins.delete(checkin.id)
     setCheckins(await db.checkins.toArray())
 
