@@ -2,6 +2,7 @@ let gapi: typeof import('gapi-script').gapi;
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY!;
+const FOLDER_ID = process.env.NEXT_PUBLIC_GOOGLE_FOLDER_ID!;
 const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'];
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
@@ -45,8 +46,6 @@ export async function carregarApiGoogle(): Promise<void> {
 }
 
 export async function loginGoogle(): Promise<gapi.auth2.GoogleUser | null> {
-  if (typeof window === 'undefined') return null;
-
   try {
     await carregarApiGoogle();
     const auth = gapi.auth2.getAuthInstance();
@@ -54,6 +53,20 @@ export async function loginGoogle(): Promise<gapi.auth2.GoogleUser | null> {
     return user;
   } catch (erro) {
     console.error('Erro ao fazer login com Google:', erro);
+    return null;
+  }
+}
+
+export async function silentLoginGoogle(): Promise<gapi.auth2.GoogleUser | null> {
+  try {
+    await carregarApiGoogle();
+    const auth = gapi.auth2.getAuthInstance();
+    if (auth.isSignedIn.get()) {
+      return auth.currentUser.get();
+    }
+    return await auth.signIn({ prompt: 'none' });
+  } catch (erro) {
+    console.warn('Login silencioso falhou:', erro);
     return null;
   }
 }
@@ -82,6 +95,7 @@ export async function salvarArquivoNoDrive(blob: Blob, nomeArquivo: string): Pro
   const metadata = {
     name: nomeArquivo,
     mimeType: 'application/json',
+    parents: [FOLDER_ID],
   };
 
   const form = new FormData();
@@ -108,7 +122,7 @@ export async function buscarUltimoBackupNoDrive(): Promise<gapi.client.drive.Fil
   if (typeof window === 'undefined' || !gapi) return null;
 
   const res = await gapi.client.drive.files.list({
-    q: "mimeType='application/json' and trashed = false",
+    q: `'${FOLDER_ID}' in parents and mimeType='application/json' and trashed = false`,
     orderBy: 'createdTime desc',
     pageSize: 1,
     fields: 'files(id, name, createdTime)',
@@ -132,4 +146,20 @@ export async function baixarArquivoDoDrive(fileId: string): Promise<Blob | null>
   }
 
   return await res.blob();
+}
+
+export async function limparBackupsAntigos(): Promise<void> {
+  if (typeof window === 'undefined' || !gapi) return;
+
+  const res = await gapi.client.drive.files.list({
+    q: `'${FOLDER_ID}' in parents and mimeType='application/json' and trashed = false`,
+    fields: 'files(id, name, createdTime)',
+  });
+
+  const arquivos = res.result.files;
+  if (arquivos && arquivos.length > 1) {
+    for (let i = 1; i < arquivos.length; i++) {
+      await gapi.client.drive.files.delete({ fileId: arquivos[i].id! });
+    }
+  }
 }
