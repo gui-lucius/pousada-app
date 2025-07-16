@@ -140,6 +140,20 @@ export interface PrecosConfig {
   >;
 }
 
+// 🔥 Adicionados
+export interface Categoria {
+  id: string;
+  nome: string;
+  emoji: string;
+}
+
+export interface Item {
+  id: number;
+  nome: string;
+  preco: number;
+  categoriaId: string;
+}
+
 class ReservaCripto {
   static encrypt(obj: Reserva): Record<string, unknown> {
     return criptografarObjeto(obj) as unknown as Record<string, unknown>;
@@ -179,6 +193,8 @@ class PousadaDB extends Dexie {
   precos!: Table<PrecosConfig, string>;
   produtos!: Table<ProdutoComanda, string>;
   usuarios!: Table<UsuarioTipo, string>;
+  categorias!: Table<Categoria, string>; 
+  itens!: Table<Item, number>;           
 
   constructor() {
     super('PousadaDB');
@@ -191,6 +207,8 @@ class PousadaDB extends Dexie {
       precos: 'id',
       produtos: 'id, categoria, nome, tipoUsavelEmComanda',
       usuarios: 'nome',
+      categorias: 'id, nome, emoji',                    
+      itens: '++id, nome, preco, categoriaId'          
     });
 
     this.reservas.mapToClass(ReservaCripto);

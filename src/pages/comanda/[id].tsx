@@ -21,12 +21,34 @@ export default function ComandaDetalhes() {
     if (!id) return;
     const carregar = async () => {
       const comandaDb = await db.consumos.get(Number(id));
-      const precosDb = await db.precos.get('config');
+
+      let precosDb = await db.precos.get('config');
+      if (!precosDb) {
+        precosDb = {
+          id: 'config',
+          hospedagem: {
+            individual: { comCafe: 0, semCafe: 0 },
+            casal: { comCafe: 0, semCafe: 0 },
+            tresPessoas: { comCafe: 0, semCafe: 0 },
+            quatroPessoas: { comCafe: 0, semCafe: 0 },
+            maisQuatro: { comCafe: 0, semCafe: 0 },
+            criancas: { de0a3Gratuito: true, de4a9: 0, aPartir10: 'adulto' },
+          },
+          restaurante: { almocoBuffet: 0, almocoTradicional: 0, descontoGeral: 0 },
+          produtos: { porPeso: [], unitarios: [] },
+          servicos: [],
+          jantar: [],
+          categoriasExtras: {} 
+        };
+        await db.precos.put(precosDb);
+      }
+
       if (comandaDb) setComanda(comandaDb);
-      if (precosDb) setPrecos(precosDb);
+      setPrecos(precosDb);
     };
     carregar();
   }, [id]);
+
 
   const atualizarComanda = async (nova: Consumo) => {
     await db.consumos.put(nova);
@@ -119,8 +141,10 @@ export default function ComandaDetalhes() {
     return <Layout title="Carregando...">Carregando comanda...</Layout>;
   }
 
+  if (!precos || !precos.categoriasExtras) {
+    return <Layout title="Carregando...">Carregando preços...</Layout>;
+  }
   
-
   return (
     <Layout title={`🧾 Comanda do ${comanda.cliente}`}>
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-8 text-black">
@@ -199,7 +223,7 @@ export default function ComandaDetalhes() {
         </div>
 
         {/* Etapa 2: Escolher Categoria */}
-        {subcomandaSelecionadaId && precos && (
+        {subcomandaSelecionadaId && precos && Object.keys(precos.categoriasExtras).length > 0 && (
           <div className="bg-white rounded shadow p-6 space-y-4">
             <h2 className="text-lg font-semibold">2️⃣ Escolha a Categoria</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
