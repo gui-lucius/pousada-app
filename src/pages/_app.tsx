@@ -3,7 +3,7 @@ import type { AppProps } from 'next/app';
 import { useEffect, useState } from 'react';
 import { iniciarMonitoramentoInatividade } from '@/utils/inatividade';
 import { iniciarSincronizacaoAutomatica } from '@/utils/backups';
-import { silentLoginGoogle, estaLogadoGoogle } from '@/utils/googleDrive';
+import { silentLoginGoogle } from '@/utils/googleDrive'; // <-- Removido o 'estaLogadoGoogle'
 
 export default function App({ Component, pageProps }: AppProps) {
   const [googlePronto, setGooglePronto] = useState(false);
@@ -18,7 +18,7 @@ export default function App({ Component, pageProps }: AppProps) {
       }
 
       iniciarMonitoramentoInatividade();
-      iniciarSincronizacaoAutomatica(1);
+      iniciarSincronizacaoAutomatica(1); // sincroniza a cada 1 minuto
       setGooglePronto(true);
     }
 
