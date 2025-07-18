@@ -1,16 +1,20 @@
 import { db } from './db';
 import bcrypt from 'bcryptjs';
 
+// Tipo principal com tudo (inclusive updatedAt)
 export type Usuario = {
   nome: string;
   senha: string;
   permissao: 'super' | 'usuario';
+  updatedAt: number;
 };
 
-type UsuarioSemSenha = Omit<Usuario, 'senha'>;
+// Tipo para armazenar no localStorage (sem senha e sem updatedAt)
+type UsuarioSemSenha = Omit<Usuario, 'senha' | 'updatedAt'>;
 
 const CHAVE_ATUAL = 'pousada_usuario_logado';
 
+// Salva localmente sem senha e sem updatedAt
 function salvarUsuarioLocal(usuario: Usuario) {
   const seguro: UsuarioSemSenha = {
     nome: usuario.nome,
@@ -19,6 +23,7 @@ function salvarUsuarioLocal(usuario: Usuario) {
   localStorage.setItem(CHAVE_ATUAL, JSON.stringify(seguro));
 }
 
+// Carrega do localStorage
 function carregarUsuarioLocal(): UsuarioSemSenha | null {
   try {
     const raw = localStorage.getItem(CHAVE_ATUAL);
@@ -29,7 +34,8 @@ function carregarUsuarioLocal(): UsuarioSemSenha | null {
   }
 }
 
-export async function criarUsuario(usuario: Usuario) {
+// Criação de usuário (define updatedAt automaticamente)
+export async function criarUsuario(usuario: Omit<Usuario, 'updatedAt'>) {
   if (typeof window === 'undefined') return;
   if (!usuario.nome || !usuario.senha) return;
 
@@ -39,10 +45,12 @@ export async function criarUsuario(usuario: Usuario) {
     await db.usuarios.add({
       ...usuario,
       senha: hash,
+      updatedAt: Date.now(),
     });
   }
 }
 
+// Faz login e retorna os dados do usuário sem senha e updatedAt
 export async function fazerLogin(nome: string, senhaDigitada: string): Promise<UsuarioSemSenha | null> {
   if (typeof window === 'undefined') return null;
 
@@ -61,19 +69,23 @@ export async function fazerLogin(nome: string, senhaDigitada: string): Promise<U
   return null;
 }
 
+// Verifica usuário atual (local)
 export function usuarioAtual(): UsuarioSemSenha | null {
   if (typeof window === 'undefined') return null;
   return carregarUsuarioLocal();
 }
 
+// Verifica se é admin
 export function isAdmin(): boolean {
   return usuarioAtual()?.permissao === 'super';
 }
 
+// Verifica se há login
 export function estaLogado(): boolean {
   return !!usuarioAtual();
 }
 
+// Limpa localStorage
 export function logout() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(CHAVE_ATUAL);

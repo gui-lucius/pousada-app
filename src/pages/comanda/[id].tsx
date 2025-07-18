@@ -44,15 +44,21 @@ export default function ComandaDetalhes() {
       }
 
       if (comandaDb) setComanda(comandaDb);
-      setPrecos(precosDb);
+      if (precosDb) setPrecos(precosDb);
+
     };
     carregar();
   }, [id]);
 
 
   const atualizarComanda = async (nova: Consumo) => {
-    await db.consumos.put(nova);
-    setComanda(nova);
+    const atualizada = {
+      ...nova,
+      updatedAt: Date.now(),
+    };
+
+    await db.consumos.put(atualizada);
+    setComanda(atualizada);
   };
 
   const calcularTotal = (itens: ItemComanda[]) =>
@@ -180,8 +186,9 @@ export default function ComandaDetalhes() {
                         ...comanda,
                         subcomandas: comanda.subcomandas.filter((s) => s.id !== sub.id),
                       }
-                      await db.consumos.put(nova)
-                      setComanda(nova)
+                      await atualizarComanda(nova);
+                      setSubcomandaSelecionadaId('');
+
                       setSubcomandaSelecionadaId('')
                     }}
                     className="text-red-600 hover:text-red-800 text-xl"
@@ -210,8 +217,8 @@ export default function ComandaDetalhes() {
                   subcomandas: [...comanda.subcomandas, novaSub]
                 }
 
-                await db.consumos.put(novaComanda)
-                setComanda(novaComanda)
+                await atualizarComanda(novaComanda);
+
                 setSubcomandaSelecionadaId(novaSub.id)
               }}
               className="px-4 py-2 mt-2 bg-green-600 text-white rounded shadow hover:bg-green-700"
@@ -399,8 +406,8 @@ export default function ComandaDetalhes() {
 
                 };
 
-                await db.consumos.put(comTodosPagos);
-                setComanda(comTodosPagos);
+                await atualizarComanda(comTodosPagos);
+
                 alert('Comanda finalizada! Todos os itens foram marcados como pagos.');
               }}
             />

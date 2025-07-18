@@ -117,7 +117,7 @@ export default function CheckInPage() {
     criancas0a3,
     criancas4a9,
     descontoPersonalizado,
-    query.valor, // ✅ Dependência adicionada
+    query.valor,
   ]);
 
   const handleSalvar = async () => {
@@ -148,6 +148,7 @@ export default function CheckInPage() {
       criancas0a3,
       criancas4a9,
       descontoPersonalizado,
+      updatedAt: Date.now()
     };
 
     await db.checkins.add(novo);
@@ -180,6 +181,7 @@ export default function CheckInPage() {
       checkinId,
       status: 'aberta',
       criadoEm: dataCriacao,
+      updatedAt: Date.now(), 
       subcomandas
     })
 

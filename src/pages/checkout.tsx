@@ -22,12 +22,18 @@ export default function CheckoutPage() {
     carregarDados()
   }, [])
 
+  const atualizarComanda = async (comanda: Consumo) => {
+    await db.consumos.put({
+      ...comanda,
+      updatedAt: Date.now(),
+    })
+  }
+
   const finalizarCheckout = async (checkin: CheckIn) => {
     const comandas = await db.consumos.where('checkinId').equals(checkin.id).toArray()
 
     for (const comanda of comandas) {
-      comanda.status = 'fechada'
-      await db.consumos.put(comanda)
+      await atualizarComanda({ ...comanda, status: 'fechada' })
     }
 
     const valorTotalHospedagem = Number(checkin.valor || 0)

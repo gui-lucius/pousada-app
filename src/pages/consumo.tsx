@@ -32,6 +32,7 @@ export default function ListaComandas() {
       hospede: tipo === 'hospede',
       status: 'aberta',
       criadoEm: new Date().toISOString(),
+      updatedAt: Date.now(),
       subcomandas: [
         {
           id: `principal-${timestamp}`,

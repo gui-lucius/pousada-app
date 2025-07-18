@@ -83,7 +83,8 @@ export default function PrecosPage() {
       produtos: { porPeso: [], unitarios: [] },
       servicos: [],
       jantar: [],
-      categoriasExtras
+      categoriasExtras,
+      updatedAt: Date.now()
     })
     alert('Preços salvos com sucesso!')
   }

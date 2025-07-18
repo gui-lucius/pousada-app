@@ -64,7 +64,8 @@ export default function DespesasPage() {
       await db.despesas.update(editandoId, {
         nome: input.nome,
         valor: parseFloat(input.valor),
-        data: input.data
+        data: input.data,
+        updatedAt: Date.now(),
       });
       setEditandoId(null);
     } else {
@@ -73,7 +74,8 @@ export default function DespesasPage() {
         categoria: categoriaId,
         nome: input.nome,
         valor: parseFloat(input.valor),
-        data: input.data
+        data: input.data,
+        updatedAt: Date.now(),
       };
       await db.despesas.add(nova);
     }

@@ -130,6 +130,7 @@ export default function ReservasPage() {
       observacoes: obs.trim(),
       status: 'reservado',
       valorEntrada: entradaPaga || '0',
+      updatedAt: Date.now()
     }
 
     if (reservaEditandoId) {

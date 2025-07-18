@@ -19,6 +19,7 @@ export interface Reserva {
   valorEntrada?: string;
   criancas0a3?: string;
   criancas4a9?: string;
+  updatedAt: number; // ✅ adicionado
 }
 
 export interface CheckIn {
@@ -46,6 +47,7 @@ export interface CheckIn {
   criancas0a3?: string;
   criancas4a9?: string;
   descontoPersonalizado?: string;
+  updatedAt: number; // ✅ adicionado
 }
 
 export interface ItemComanda {
@@ -72,6 +74,7 @@ export interface Consumo {
   subcomandas: Subcomanda[];
   status: 'aberta' | 'fechada' | 'paga';
   criadoEm: string;
+  updatedAt: number; // ✅ adicionado
 }
 
 export interface Checkout {
@@ -88,6 +91,7 @@ export interface Despesa {
   nome: string;
   valor: number;
   data: string;
+  updatedAt: number; // ✅ adicionado
 }
 
 export interface ProdutoComanda {
@@ -138,6 +142,8 @@ export interface PrecosConfig {
       itens: { nome: string; preco: number }[];
     }
   >;
+
+  updatedAt: number;
 }
 
 // 🔥 Adicionados
