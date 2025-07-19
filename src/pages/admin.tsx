@@ -71,7 +71,7 @@ export default function AdminPage() {
   };
 
   const handleEditar = (index: number) => {
-    const { updatedAt, ...dados } = usuarios[index]; // remove updatedAt para o formulário
+    const dados = usuarios[index]; // updatedAt não é necessário
     setForm({ ...dados, senha: '' }); // senha limpa
     setEditando(index);
     setMostrandoFormulario(true);

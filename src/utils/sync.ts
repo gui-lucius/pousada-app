@@ -33,11 +33,11 @@ export async function sincronizar() {
         [db.reservas, db.checkins, db.consumos, db.precos, db.usuarios, db.despesas],
         async () => {
           for (const [storeName, items] of Object.entries(dados)) {
-            const table = (db as Record<string, any>)[storeName];
+            const table = (db as any)[storeName];
             if (table && Array.isArray(items)) {
               await table.clear();
               await Promise.all(
-                (items as Record<string, unknown>[]).map((item) => table.put(item))
+                items.map((item) => table.put(item))
               );
             }
           }
@@ -49,7 +49,8 @@ export async function sincronizar() {
     const stores = ['reservas', 'checkins', 'consumos', 'despesas', 'precos', 'usuarios'];
 
     for (const store of stores) {
-      exportObj[store] = await (db as Record<string, any>)[store].toArray();
+      const table = (db as any)[store];
+      exportObj[store] = await table.toArray();
     }
 
     const nome = gerarNomeArquivo();
