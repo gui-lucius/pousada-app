@@ -15,6 +15,9 @@ function gerarNomeArquivo(): string {
   return `backup-pousada-${Date.now()}-${DEVICE_ID}.json`;
 }
 
+type StoreName = 'reservas' | 'checkins' | 'consumos' | 'despesas' | 'precos' | 'usuarios';
+type StoreData = Record<StoreName, unknown[]>;
+
 export async function sincronizar() {
   if (rodando) return;
   rodando = true;
@@ -26,18 +29,19 @@ export async function sincronizar() {
     if (arquivo && isDeOutroDispositivo) {
       console.log('↙️ Sincronizando do Drive...', arquivo.nome);
 
-      const dados = arquivo.dados as Record<string, unknown[]>;
+      const dados = arquivo.dados as StoreData;
 
       await db.transaction(
         'rw',
         [db.reservas, db.checkins, db.consumos, db.precos, db.usuarios, db.despesas],
         async () => {
-          for (const [storeName, items] of Object.entries(dados)) {
-            const table = (db as any)[storeName];
+          for (const storeName of Object.keys(dados) as StoreName[]) {
+            const items = dados[storeName];
+            const table = db[storeName];
             if (table && Array.isArray(items)) {
               await table.clear();
               await Promise.all(
-                items.map((item) => table.put(item))
+                items.map((item) => table.put(item as any)) // <- cast controlado
               );
             }
           }
@@ -45,13 +49,14 @@ export async function sincronizar() {
       );
     }
 
-    const exportObj: Record<string, unknown[]> = {};
-    const stores = ['reservas', 'checkins', 'consumos', 'despesas', 'precos', 'usuarios'];
-
-    for (const store of stores) {
-      const table = (db as any)[store];
-      exportObj[store] = await table.toArray();
-    }
+    const exportObj: StoreData = {
+      reservas: await db.reservas.toArray(),
+      checkins: await db.checkins.toArray(),
+      consumos: await db.consumos.toArray(),
+      despesas: await db.despesas.toArray(),
+      precos: await db.precos.toArray(),
+      usuarios: await db.usuarios.toArray(),
+    };
 
     const nome = gerarNomeArquivo();
     console.log('↗️ Subindo backup para Drive...', nome);
