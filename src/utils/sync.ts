@@ -16,7 +16,14 @@ function gerarNomeArquivo(): string {
 }
 
 type StoreName = 'reservas' | 'checkins' | 'consumos' | 'despesas' | 'precos' | 'usuarios';
-type StoreData = Record<StoreName, unknown[]>;
+type StoreData = {
+  reservas: any[]; // substitua por `Reserva[]` se tiver o tipo
+  checkins: any[];
+  consumos: any[];
+  despesas: any[];
+  precos: any[];
+  usuarios: any[];
+};
 
 export async function sincronizar() {
   if (rodando) return;
@@ -29,7 +36,7 @@ export async function sincronizar() {
     if (arquivo && isDeOutroDispositivo) {
       console.log('↙️ Sincronizando do Drive...', arquivo.nome);
 
-      const dados = arquivo.dados as StoreData;
+      const dados = arquivo.dados as Partial<StoreData>;
 
       await db.transaction(
         'rw',
@@ -41,7 +48,7 @@ export async function sincronizar() {
             if (table && Array.isArray(items)) {
               await table.clear();
               await Promise.all(
-                items.map((item) => table.put(item as any)) // <- cast controlado
+                items.map((item) => table.put(item)) // aqui item é `any`
               );
             }
           }
