@@ -1,5 +1,9 @@
-import { carregarApiGoogle, estaLogadoGoogle, loginGoogle } from './googleDrive';
-import { salvarArquivoNoDrive, buscarUltimoBackupNoDrive, baixarArquivoDoDrive } from './googleDrive';
+import { estaLogadoGoogle, loginGoogle } from './googleDrive';
+import {
+  salvarArquivoNoDrive,
+  buscarUltimoBackupNoDrive,
+  baixarArquivoDoDrive
+} from './googleDrive';
 
 const MIME_JSON = 'application/json';
 
@@ -15,9 +19,11 @@ async function garantirLogin() {
 /**
  * Envia um arquivo JSON para o Google Drive com o nome especificado.
  */
-export async function uploadArquivoJson(nome: string, dados: any): Promise<string | null> {
+export async function uploadArquivoJson(
+  nome: string,
+  dados: Record<string, unknown>
+): Promise<string | null> {
   await garantirLogin();
-
   const blob = new Blob([JSON.stringify(dados)], { type: MIME_JSON });
   return await salvarArquivoNoDrive(blob, nome);
 }
@@ -27,7 +33,6 @@ export async function uploadArquivoJson(nome: string, dados: any): Promise<strin
  */
 export async function listarArquivos(): Promise<gapi.client.drive.File[]> {
   await garantirLogin();
-
   const arquivo = await buscarUltimoBackupNoDrive();
   return arquivo ? [arquivo] : [];
 }
@@ -35,7 +40,10 @@ export async function listarArquivos(): Promise<gapi.client.drive.File[]> {
 /**
  * Baixa e retorna o conteúdo do último backup em formato { nome, dados }.
  */
-export async function baixarUltimoArquivo(): Promise<{ nome: string; dados: any } | null> {
+export async function baixarUltimoArquivo(): Promise<{
+  nome: string;
+  dados: Record<string, unknown>;
+} | null> {
   await garantirLogin();
 
   const item = await buscarUltimoBackupNoDrive();
@@ -45,5 +53,8 @@ export async function baixarUltimoArquivo(): Promise<{ nome: string; dados: any 
   if (!blob) return null;
 
   const text = await blob.text();
-  return { nome: item.name, dados: JSON.parse(text) };
+  return {
+    nome: item.name,
+    dados: JSON.parse(text)
+  };
 }
