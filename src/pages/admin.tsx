@@ -6,12 +6,14 @@ import { useState, useEffect } from 'react';
 import { db } from '@/utils/db';
 import { useApenasAdmin } from '@/utils/proteger';
 import { usuarioAtual } from '@/utils/auth';
-import bcrypt from 'bcryptjs'; 
+import bcrypt from 'bcryptjs';
 
+// Corrigido: incluído updatedAt no tipo
 type Usuario = {
   nome: string;
   senha: string;
   permissao: 'usuario' | 'super';
+  updatedAt: number;
 };
 
 export default function AdminPage() {
@@ -19,7 +21,7 @@ export default function AdminPage() {
 
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [editando, setEditando] = useState<number | null>(null);
-  const [form, setForm] = useState<Usuario>({ nome: '', senha: '', permissao: 'usuario' });
+  const [form, setForm] = useState<Omit<Usuario, 'updatedAt'>>({ nome: '', senha: '', permissao: 'usuario' });
   const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
 
   useEffect(() => {
@@ -54,11 +56,13 @@ export default function AdminPage() {
       await db.usuarios.update(usuarioOriginal.nome, {
         ...form,
         senha: novaSenha,
+        updatedAt: Date.now(),
       });
     } else {
       await db.usuarios.add({
         ...form,
         senha: senhaCriptografada,
+        updatedAt: Date.now(),
       });
     }
 
@@ -67,7 +71,8 @@ export default function AdminPage() {
   };
 
   const handleEditar = (index: number) => {
-    setForm({ ...usuarios[index], senha: '' }); 
+    const { updatedAt, ...dados } = usuarios[index]; // remove updatedAt para o formulário
+    setForm({ ...dados, senha: '' }); // senha limpa
     setEditando(index);
     setMostrandoFormulario(true);
   };

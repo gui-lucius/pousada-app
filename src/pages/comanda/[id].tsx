@@ -38,7 +38,8 @@ export default function ComandaDetalhes() {
           produtos: { porPeso: [], unitarios: [] },
           servicos: [],
           jantar: [],
-          categoriasExtras: {} 
+          categoriasExtras: {},
+          updatedAt: Date.now()
         };
         await db.precos.put(precosDb);
       }
