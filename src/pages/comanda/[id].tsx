@@ -4,79 +4,66 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '@/components/layout/Layout';
 import Botao from '@/components/ui/Botao';
-import { db, Consumo, PrecosConfig, ItemComanda } from '@/utils/db';
 
 export default function ComandaDetalhes() {
   const router = useRouter();
   const { id } = router.query;
 
-  const [comanda, setComanda] = useState<Consumo | null>(null);
-  const [precos, setPrecos] = useState<PrecosConfig | null>(null);
+  const [comanda, setComanda] = useState<any>(null);
+  const [precos, setPrecos] = useState<any>(null);
 
   const [subcomandaSelecionadaId, setSubcomandaSelecionadaId] = useState('');
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
   const [quantidades, setQuantidades] = useState<Record<string, number>>({});
 
+  // Buscar comanda e precos no banco via API
   useEffect(() => {
-    if (!id) return;
+    if (!id || typeof id !== 'string') return;
+
     const carregar = async () => {
-      const comandaDb = await db.consumos.get(Number(id));
+      // Buscar comanda pelo id
+      const resComanda = await fetch(`/api/consumo?id=${id}`);
+      const comandaDb = await resComanda.json();
 
-      let precosDb = await db.precos.get('config');
-      if (!precosDb) {
-        precosDb = {
-          id: 'config',
-          hospedagem: {
-            individual: { comCafe: 0, semCafe: 0 },
-            casal: { comCafe: 0, semCafe: 0 },
-            tresPessoas: { comCafe: 0, semCafe: 0 },
-            quatroPessoas: { comCafe: 0, semCafe: 0 },
-            maisQuatro: { comCafe: 0, semCafe: 0 },
-            criancas: { de0a3Gratuito: true, de4a9: 0, aPartir10: 'adulto' },
-          },
-          restaurante: { almocoBuffet: 0, almocoTradicional: 0, descontoGeral: 0 },
-          produtos: { porPeso: [], unitarios: [] },
-          servicos: [],
-          jantar: [],
-          categoriasExtras: {},
-          updatedAt: Date.now()
-        };
-        await db.precos.put(precosDb);
-      }
+      // Buscar precos/config
+      const resPrecos = await fetch('/api/precos');
+      const precosDb = await resPrecos.json();
 
-      if (comandaDb) setComanda(comandaDb);
-      if (precosDb) setPrecos(precosDb);
-
+      setComanda(comandaDb);
+      setPrecos(precosDb);
     };
     carregar();
   }, [id]);
 
-
-  const atualizarComanda = async (nova: Consumo) => {
+  // Atualizar comanda no banco via API
+  const atualizarComanda = async (nova: any) => {
     const atualizada = {
       ...nova,
       updatedAt: Date.now(),
     };
-
-    await db.consumos.put(atualizada);
+    await fetch('/api/consumo', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(atualizada),
+    });
     setComanda(atualizada);
   };
 
-  const calcularTotal = (itens: ItemComanda[]) =>
+  const calcularTotal = (itens: any[]) =>
     itens.reduce((acc, i) => acc + (i.pago ? 0 : i.preco * i.quantidade), 0);
 
   const adicionarItensSelecionados = () => {
     if (!comanda || !precos || !categoriaSelecionada || !subcomandaSelecionadaId) return;
 
-    const subIndex = comanda.subcomandas.findIndex(s => s.id === subcomandaSelecionadaId);
+    const subIndex = comanda.subcomandas.findIndex((s: any) => s.id === subcomandaSelecionadaId);
     if (subIndex === -1) return;
 
     const categoria = precos.categoriasExtras[categoriaSelecionada];
     if (!categoria) return;
 
-    const novosItens: ItemComanda[] = categoria.itens
-      .filter(item => quantidades[item.nome] && quantidades[item.nome] > 0)
-      .map(item => ({
+    const novosItens = categoria.itens
+      .filter((item: any) => quantidades[item.nome] && quantidades[item.nome] > 0)
+      .map((item: any) => ({
         nome: item.nome,
         preco: item.preco,
         quantidade: quantidades[item.nome],
@@ -98,11 +85,11 @@ export default function ComandaDetalhes() {
     setQuantidades({});
   };
 
-  const atualizarItem = <K extends keyof ItemComanda>(
+  const atualizarItem = (
     subIndex: number,
     itemIndex: number,
-    campo: K,
-    valor: ItemComanda[K]
+    campo: string,
+    valor: any
   ) => {
     if (!comanda) return;
 
@@ -120,7 +107,6 @@ export default function ComandaDetalhes() {
 
   const removerItem = (subIndex: number, itemIndex: number) => {
     if (!comanda) return;
-
     const item = comanda.subcomandas[subIndex].itens[itemIndex];
     if (item.pago) return;
 
@@ -151,7 +137,7 @@ export default function ComandaDetalhes() {
   if (!precos || !precos.categoriasExtras) {
     return <Layout title="Carregando...">Carregando preços...</Layout>;
   }
-  
+
   return (
     <Layout title={`🧾 Comanda do ${comanda.cliente}`}>
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-8 text-black">
@@ -165,7 +151,7 @@ export default function ComandaDetalhes() {
         <div className="bg-white rounded shadow p-6 space-y-4">
           <h2 className="text-lg font-semibold">1️⃣ Escolha a Pessoa</h2>
           <div className="flex flex-wrap gap-3">
-            {comanda.subcomandas.map((sub) => (
+            {comanda.subcomandas.map((sub: any) => (
               <div key={sub.id} className="flex items-center gap-2">
                 <button
                   onClick={() => setSubcomandaSelecionadaId(sub.id)}
@@ -185,12 +171,10 @@ export default function ComandaDetalhes() {
                       if (!confirm(`Remover ${sub.nome} da comanda?`)) return
                       const nova = {
                         ...comanda,
-                        subcomandas: comanda.subcomandas.filter((s) => s.id !== sub.id),
+                        subcomandas: comanda.subcomandas.filter((s: any) => s.id !== sub.id),
                       }
                       await atualizarComanda(nova);
                       setSubcomandaSelecionadaId('');
-
-                      setSubcomandaSelecionadaId('')
                     }}
                     className="text-red-600 hover:text-red-800 text-xl"
                   >
@@ -200,33 +184,31 @@ export default function ComandaDetalhes() {
               </div>
             ))}
 
-
             <button
               onClick={async () => {
-                const nome = prompt('Digite o nome da nova pessoa:')
-                if (!nome || !comanda) return
+                const nome = prompt('Digite o nome da nova pessoa:');
+                if (!nome || !comanda) return;
 
                 const novaSub = {
                   id: Date.now().toString(),
                   nome,
                   itens: [],
-                  total: 0
-                }
+                  total: 0,
+                };
 
                 const novaComanda = {
                   ...comanda,
-                  subcomandas: [...comanda.subcomandas, novaSub]
-                }
+                  subcomandas: [...comanda.subcomandas, novaSub],
+                };
 
                 await atualizarComanda(novaComanda);
 
-                setSubcomandaSelecionadaId(novaSub.id)
+                setSubcomandaSelecionadaId(novaSub.id);
               }}
               className="px-4 py-2 mt-2 bg-green-600 text-white rounded shadow hover:bg-green-700"
             >
               ➕ Adicionar Pessoa à Comanda
             </button>
-
           </div>
         </div>
 
@@ -236,9 +218,8 @@ export default function ComandaDetalhes() {
             <h2 className="text-lg font-semibold">2️⃣ Escolha a Categoria</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {Object.entries(precos.categoriasExtras)
-                .filter(([, cat]) => cat.usarEmComanda)
-
-                .map(([nome, cat]) => (
+                .filter(([, cat]: any) => cat.usarEmComanda)
+                .map(([nome, cat]: any) => (
                   <button
                     key={nome}
                     onClick={() => setCategoriaSelecionada(nome)}
@@ -261,7 +242,7 @@ export default function ComandaDetalhes() {
           <div className="bg-white rounded shadow p-6 space-y-4">
             <h2 className="text-lg font-semibold">3️⃣ Itens da Categoria</h2>
             <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {precos?.categoriasExtras[categoriaSelecionada]?.itens.map((item) => (
+              {precos?.categoriasExtras[categoriaSelecionada]?.itens.map((item: any) => (
                 <div key={item.nome} className="border rounded p-4">
                   <p className="font-semibold">{item.nome}</p>
                   <p className="text-sm text-gray-500">R$ {item.preco.toFixed(2)}</p>
@@ -306,11 +287,9 @@ export default function ComandaDetalhes() {
                       </button>
                     </div>
                   )}
-
                 </div>
               ))}
             </div>
-
             <div className="pt-4 text-right">
               <Botao texto="Adicionar à Comanda" onClick={adicionarItensSelecionados} />
             </div>
@@ -318,15 +297,14 @@ export default function ComandaDetalhes() {
         )}
 
         {/* Exibir Subcomandas */}
-        {comanda.subcomandas.map((sub, subIndex) => (
+        {comanda.subcomandas.map((sub: any, subIndex: number) => (
           <div key={sub.id} className="bg-white rounded shadow p-6 space-y-4">
             <h3 className="text-lg font-bold">📋 Itens de {sub.nome}</h3>
-
             {sub.itens.length === 0 ? (
               <p className="text-gray-500">Nenhum item adicionado.</p>
             ) : (
               <div className="space-y-2">
-                {sub.itens.map((item, itemIndex) => (
+                {sub.itens.map((item: any, itemIndex: number) => (
                   <div
                     key={itemIndex}
                     className={`grid grid-cols-[2fr_1fr_1fr_1fr_auto_auto] gap-3 items-center border rounded p-2 ${
@@ -380,12 +358,10 @@ export default function ComandaDetalhes() {
                     >
                       {item.pago ? '↩️ Reabrir' : '💰 Marcar como Pago'}
                     </button>
-
                   </div>
                 ))}
               </div>
             )}
-
             <p className="text-right font-semibold text-green-700">
               Total em aberto: R$ {sub.total.toFixed(2)}
             </p>
@@ -399,22 +375,18 @@ export default function ComandaDetalhes() {
               onClick={async () => {
                 const comTodosPagos = {
                   ...comanda,
-                  subcomandas: comanda.subcomandas.map((sub) => ({
+                  subcomandas: comanda.subcomandas.map((sub: any) => ({
                     ...sub,
-                    itens: sub.itens.map((item) => ({ ...item, pago: true })),
+                    itens: sub.itens.map((item: any) => ({ ...item, pago: true })),
                   })),
-                status: 'paga' as const
-
+                  status: 'paga',
                 };
-
                 await atualizarComanda(comTodosPagos);
-
                 alert('Comanda finalizada! Todos os itens foram marcados como pagos.');
               }}
             />
           </div>
         )}
-
 
         <div className="text-center pt-4">
           <Botao texto="🔙 Voltar" onClick={() => router.push('/consumo')} />

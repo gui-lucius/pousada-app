@@ -81,8 +81,8 @@ export default function FaturamentoPage() {
       const dataInicio = new Date(inicio)
       const dataFim = new Date(fim)
 
-      const checkouts = await db.checkouts.toArray()
-      const consumos = await db.consumos.toArray()
+      const checkouts = (await db.checkouts.allDocs({ include_docs: true })).rows.map(r => r.doc) as Checkout[]
+      const consumos = (await db.consumos.allDocs({ include_docs: true })).rows.map(r => r.doc) as Consumo[]
 
       const resumo: Record<string, Record<string, { quantidade: number; total: number }>> = {}
       let total = 0

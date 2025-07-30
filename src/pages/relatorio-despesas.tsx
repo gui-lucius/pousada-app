@@ -1,8 +1,15 @@
 import Layout from '@/components/layout/Layout'
 import { useEffect, useState } from 'react'
-import { db, Despesa } from '@/utils/db'
 import { format, parseISO, isValid } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+
+type Despesa = {
+  id: string
+  nome: string
+  valor: number
+  categoria: string
+  data: string
+}
 
 export default function RelatorioDespesas() {
   const [despesas, setDespesas] = useState<Despesa[]>([])
@@ -12,7 +19,8 @@ export default function RelatorioDespesas() {
 
   useEffect(() => {
     const carregar = async () => {
-      const todas = await db.despesas.toArray()
+      const res = await fetch('/api/despesas')
+      const todas = await res.json()
       setDespesas(todas)
     }
     carregar()

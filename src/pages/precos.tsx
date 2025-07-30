@@ -3,7 +3,6 @@ import Input from '@/components/ui/Input'
 import Botao from '@/components/ui/Botao'
 import { useEffect, useState } from 'react'
 import { useApenasAdmin } from '@/utils/proteger'
-import { db } from '@/utils/db'
 
 type HospedagemTipo =
   | 'individual'
@@ -34,12 +33,16 @@ type CategoriasExtras = Record<
   }
 >
 
+type PrecosAPI = {
+  hospedagem: Hospedagem
+  categoriasExtras: CategoriasExtras
+}
+
 export default function PrecosPage() {
   useApenasAdmin()
 
   const [categoriasExtras, setCategoriasExtras] = useState<CategoriasExtras>({})
   const [categoria, setCategoria] = useState<string>('hospedagem')
-
   const [hospedagem, setHospedagem] = useState<Hospedagem>({
     individual: { comCafe: 0, semCafe: 0 },
     casal: { comCafe: 0, semCafe: 0 },
@@ -52,41 +55,46 @@ export default function PrecosPage() {
       aPartir10: 'adulto'
     }
   })
+  const [loading, setLoading] = useState(false)
 
+  // BUSCA PREÇOS DA API
   useEffect(() => {
-    db.precos.get('config').then((dados) => {
-      if (!dados) return
-
-      setHospedagem({
-        individual: dados.hospedagem.individual ?? { comCafe: 0, semCafe: 0 },
-        casal: dados.hospedagem.casal ?? { comCafe: 0, semCafe: 0 },
-        tresPessoas: dados.hospedagem.tresPessoas ?? { comCafe: 0, semCafe: 0 },
-        quatroPessoas: dados.hospedagem.quatroPessoas ?? { comCafe: 0, semCafe: 0 },
-        maisQuatro: dados.hospedagem.maisQuatro ?? { comCafe: 0, semCafe: 0 },
-        criancas: dados.hospedagem.criancas ?? {
-          de0a3Gratuito: true,
-          de4a9: 0,
-          aPartir10: 'adulto'
-        }
-      })
-
-      setCategoriasExtras(dados.categoriasExtras || {})
-    })
+    const fetchPrecos = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch('/api/precos')
+        if (!res.ok) throw new Error('Erro ao buscar preços')
+        const dados: PrecosAPI = await res.json()
+        if (dados?.hospedagem) setHospedagem(dados.hospedagem)
+        if (dados?.categoriasExtras) setCategoriasExtras(dados.categoriasExtras)
+      } catch (err) {
+        alert('Erro ao carregar preços. Verifique conexão/API.')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPrecos()
   }, [])
 
-
+  // SALVA PREÇOS NA API
   const salvar = async () => {
-    await db.precos.put({
-      id: 'config',
-      hospedagem,
-      restaurante: { almocoBuffet: 0, almocoTradicional: 0, descontoGeral: 0 },
-      produtos: { porPeso: [], unitarios: [] },
-      servicos: [],
-      jantar: [],
-      categoriasExtras,
-      updatedAt: Date.now()
-    })
-    alert('Preços salvos com sucesso!')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/precos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hospedagem,
+          categoriasExtras
+        })
+      })
+      if (!res.ok) throw new Error('Erro ao salvar preços')
+      alert('Preços salvos com sucesso!')
+    } catch (err) {
+      alert('Erro ao salvar preços. Tente novamente.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const labelPorTipo: Record<HospedagemTipo, string> = {
@@ -102,15 +110,7 @@ export default function PrecosPage() {
       return (
         <section>
           <h2 className="text-2xl font-bold mb-4">🏨 Hospedagem</h2>
-          {(
-            [
-              'individual',
-              'casal',
-              'tresPessoas',
-              'quatroPessoas',
-              'maisQuatro'
-            ] as const
-          ).map((tipo) => (
+          {(['individual', 'casal', 'tresPessoas', 'quatroPessoas', 'maisQuatro'] as const).map((tipo) => (
             <div key={tipo} className="mb-4">
               <h3 className="font-semibold text-lg">{labelPorTipo[tipo]}</h3>
               <div className="grid grid-cols-2 gap-4">
@@ -118,14 +118,11 @@ export default function PrecosPage() {
                   label="Com café"
                   type="number"
                   prefixoMonetario
-                  value={hospedagem[tipo].comCafe}
-                  onChange={(e) =>
+                  value={hospedagem[tipo]?.comCafe ?? 0}
+                  onChange={e =>
                     setHospedagem({
                       ...hospedagem,
-                      [tipo]: {
-                        ...hospedagem[tipo],
-                        comCafe: Number(e.target.value)
-                      }
+                      [tipo]: { ...hospedagem[tipo], comCafe: Number(e.target.value) }
                     })
                   }
                 />
@@ -133,14 +130,11 @@ export default function PrecosPage() {
                   label="Sem café"
                   type="number"
                   prefixoMonetario
-                  value={hospedagem[tipo].semCafe}
-                  onChange={(e) =>
+                  value={hospedagem[tipo]?.semCafe ?? 0}
+                  onChange={e =>
                     setHospedagem({
                       ...hospedagem,
-                      [tipo]: {
-                        ...hospedagem[tipo],
-                        semCafe: Number(e.target.value)
-                      }
+                      [tipo]: { ...hospedagem[tipo], semCafe: Number(e.target.value) }
                     })
                   }
                 />
@@ -154,14 +148,11 @@ export default function PrecosPage() {
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
-                checked={hospedagem.criancas.de0a3Gratuito}
-                onChange={(e) =>
+                checked={hospedagem.criancas?.de0a3Gratuito ?? false}
+                onChange={e =>
                   setHospedagem({
                     ...hospedagem,
-                    criancas: {
-                      ...hospedagem.criancas,
-                      de0a3Gratuito: e.target.checked
-                    }
+                    criancas: { ...hospedagem.criancas, de0a3Gratuito: e.target.checked }
                   })
                 }
               />
@@ -172,68 +163,57 @@ export default function PrecosPage() {
               label="4 a 9 anos (valor)"
               type="number"
               prefixoMonetario
-              value={hospedagem.criancas.de4a9}
-              onChange={(e) =>
+              value={hospedagem.criancas?.de4a9 ?? 0}
+              onChange={e =>
                 setHospedagem({
                   ...hospedagem,
-                  criancas: {
-                    ...hospedagem.criancas,
-                    de4a9: Number(e.target.value)
-                  }
+                  criancas: { ...hospedagem.criancas, de4a9: Number(e.target.value) }
                 })
               }
             />
+
           </div>
         </section>
       )
     }
 
+    // OUTRAS CATEGORIAS EXTRAS
     if (categoriasExtras[categoria]) {
       return (
         <section>
           <h2 className="text-2xl font-bold mb-4">
             {categoriasExtras[categoria].emoji} {categoria}
           </h2>
-
           <div className="mb-4">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={categoriasExtras[categoria].usarEmComanda || false}
-                onChange={(e) => {
+                onChange={e =>
                   setCategoriasExtras({
                     ...categoriasExtras,
-                    [categoria]: {
-                      ...categoriasExtras[categoria],
-                      usarEmComanda: e.target.checked
-                    }
+                    [categoria]: { ...categoriasExtras[categoria], usarEmComanda: e.target.checked }
                   })
-                }}
+                }
               />
               Usar essa categoria na comanda?
             </label>
           </div>
-
           <div className="mb-4">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={categoriasExtras[categoria].porKg || false}
-                onChange={(e) => {
+                onChange={e =>
                   setCategoriasExtras({
                     ...categoriasExtras,
-                    [categoria]: {
-                      ...categoriasExtras[categoria],
-                      porKg: e.target.checked,
-                    },
-                  });
-                }}
+                    [categoria]: { ...categoriasExtras[categoria], porKg: e.target.checked }
+                  })
+                }
               />
               Esta categoria é por KG?
             </label>
           </div>
-
-
           <div className="space-y-2">
             {categoriasExtras[categoria].itens.map((item, i) => (
               <div
@@ -244,15 +224,12 @@ export default function PrecosPage() {
                   type="text"
                   placeholder="Nome"
                   value={item.nome}
-                  onChange={(e) => {
+                  onChange={e => {
                     const novos = [...categoriasExtras[categoria].itens]
                     novos[i].nome = e.target.value
                     setCategoriasExtras({
                       ...categoriasExtras,
-                      [categoria]: {
-                        ...categoriasExtras[categoria],
-                        itens: novos
-                      }
+                      [categoria]: { ...categoriasExtras[categoria], itens: novos }
                     })
                   }}
                 />
@@ -261,15 +238,12 @@ export default function PrecosPage() {
                   prefixoMonetario
                   placeholder="Preço"
                   value={item.preco}
-                  onChange={(e) => {
+                  onChange={e => {
                     const novos = [...categoriasExtras[categoria].itens]
                     novos[i].preco = Number(e.target.value)
                     setCategoriasExtras({
                       ...categoriasExtras,
-                      [categoria]: {
-                        ...categoriasExtras[categoria],
-                        itens: novos
-                      }
+                      [categoria]: { ...categoriasExtras[categoria], itens: novos }
                     })
                   }}
                 />
@@ -279,10 +253,7 @@ export default function PrecosPage() {
                     novos.splice(i, 1)
                     setCategoriasExtras({
                       ...categoriasExtras,
-                      [categoria]: {
-                        ...categoriasExtras[categoria],
-                        itens: novos
-                      }
+                      [categoria]: { ...categoriasExtras[categoria], itens: novos }
                     })
                   }}
                   className="text-pink-600 hover:text-pink-800 text-xl"
@@ -292,20 +263,13 @@ export default function PrecosPage() {
                 </button>
               </div>
             ))}
-
             <div className="pt-2">
               <button
                 onClick={() => {
-                  const novos = [
-                    ...categoriasExtras[categoria].itens,
-                    { nome: '', preco: 0 }
-                  ]
+                  const novos = [...categoriasExtras[categoria].itens, { nome: '', preco: 0 }]
                   setCategoriasExtras({
                     ...categoriasExtras,
-                    [categoria]: {
-                      ...categoriasExtras[categoria],
-                      itens: novos
-                    }
+                    [categoria]: { ...categoriasExtras[categoria], itens: novos }
                   })
                 }}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow"
@@ -317,7 +281,6 @@ export default function PrecosPage() {
         </section>
       )
     }
-
     return null
   }
 
@@ -327,13 +290,11 @@ export default function PrecosPage() {
         <div className="bg-white border shadow rounded-lg p-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <h2 className="text-xl font-bold text-gray-800">🎛️ Painel de Categorias</h2>
-
             <button
               onClick={() => {
                 const nome = prompt('Digite o nome da nova categoria:')
                 if (!nome || categoriasExtras[nome]) return
-                const emoji =
-                  prompt('Escolha um emoji para essa categoria (ex: 🍺):') || '🆕'
+                const emoji = prompt('Escolha um emoji para essa categoria (ex: 🍺):') || '🆕'
                 setCategoriasExtras({
                   ...categoriasExtras,
                   [nome]: { emoji, itens: [] }
@@ -344,7 +305,6 @@ export default function PrecosPage() {
             >
               ➕ Nova Categoria
             </button>
-
             {categoria in categoriasExtras && (
               <button
                 onClick={() => {
@@ -361,14 +321,13 @@ export default function PrecosPage() {
               </button>
             )}
           </div>
-
           <label className="block text-gray-700 mb-1 font-medium">
             Escolha uma categoria:
           </label>
           <select
             className="border border-gray-300 rounded px-4 py-2 w-full text-black"
             value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
+            onChange={e => setCategoria(e.target.value)}
           >
             <option value="hospedagem">🏨 Hospedagem</option>
             {Object.entries(categoriasExtras).map(([cat, data]) => (
@@ -378,11 +337,9 @@ export default function PrecosPage() {
             ))}
           </select>
         </div>
-
         {renderCategoria()}
-
         <div className="text-center pt-6">
-          <Botao texto="Salvar Preços" onClick={salvar} />
+          <Botao texto={loading ? 'Salvando...' : 'Salvar Preços'} onClick={salvar} disabled={loading} />
         </div>
       </div>
     </Layout>

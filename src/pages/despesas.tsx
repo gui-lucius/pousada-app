@@ -1,51 +1,64 @@
-import Layout from '@/components/layout/Layout';
-import Input from '@/components/ui/Input';
-import Botao from '@/components/ui/Botao';
-import { useEffect, useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { db, Despesa } from '@/utils/db';
+import Layout from '@/components/layout/Layout'
+import Input from '@/components/ui/Input'
+import Botao from '@/components/ui/Botao'
+import { useEffect, useState } from 'react'
+
+type Despesa = {
+  id: string
+  nome: string
+  valor: number
+  categoria: string
+  data: string
+}
 
 type Categoria = {
-  nome: string;
-  id: string;
-};
+  nome: string
+}
 
 export default function DespesasPage() {
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [despesas, setDespesas] = useState<Despesa[]>([]);
-  const [novaCategoria, setNovaCategoria] = useState('');
-  const [filtro, setFiltro] = useState('');
+  const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [despesas, setDespesas] = useState<Despesa[]>([])
+  const [novaCategoria, setNovaCategoria] = useState('')
+  const [filtro, setFiltro] = useState('')
   const [inputsPorCategoria, setInputsPorCategoria] = useState<
     Record<string, { nome: string; valor: string; data: string }>
-  >({});
-  const [editandoId, setEditandoId] = useState<string | null>(null);
+  >({})
+  const [editandoId, setEditandoId] = useState<string | null>(null)
 
   useEffect(() => {
-    carregarDados();
-  }, []);
+    carregarDados()
+  }, [])
 
-  const carregarDados = async () => {
-    const despesas = await db.despesas.toArray();
-    setDespesas(despesas);
-    const categoriasUnicas = Array.from(new Set(despesas.map(d => d.categoria)));
-    setCategorias(categoriasUnicas.map(nome => ({ nome, id: nome })));
-  };
+  async function carregarDados() {
+    const res = await fetch('/api/despesas')
+    const docs: Despesa[] = await res.json()
+    setDespesas(docs)
+    const categoriasUnicas = Array.from(new Set(docs.map(d => d.categoria)))
+    setCategorias(categoriasUnicas.map(nome => ({ nome })))
+  }
 
-  const adicionarCategoria = () => {
-    if (!novaCategoria.trim()) return;
-    if (categorias.find(c => c.nome === novaCategoria)) return;
-    setCategorias([...categorias, { nome: novaCategoria, id: novaCategoria }]);
-    setNovaCategoria('');
-  };
+  function adicionarCategoria() {
+    if (!novaCategoria.trim()) return
+    if (categorias.find(c => c.nome === novaCategoria)) return
+    setCategorias([...categorias, { nome: novaCategoria }])
+    setNovaCategoria('')
+  }
 
-  const excluirCategoria = async (catId: string) => {
-    if (!confirm('Excluir essa categoria e todas as despesas?')) return;
-    await db.despesas.where('categoria').equals(catId).delete();
-    await carregarDados();
-  };
+  async function excluirCategoria(catNome: string) {
+    if (!confirm('Excluir essa categoria e todas as despesas?')) return
+    const despesasParaExcluir = despesas.filter(d => d.categoria === catNome)
+    for (const d of despesasParaExcluir) {
+      await fetch('/api/despesas', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: d.id })
+      })
+    }
+    await carregarDados()
+  }
 
-  const editarItem = (item: Despesa) => {
-    setEditandoId(item.id);
+  function editarItem(item: Despesa) {
+    setEditandoId(item.id)
     setInputsPorCategoria(prev => ({
       ...prev,
       [item.categoria]: {
@@ -53,56 +66,68 @@ export default function DespesasPage() {
         valor: item.valor.toString(),
         data: item.data
       }
-    }));
-  };
+    }))
+  }
 
-  const salvarItem = async (categoriaId: string) => {
-    const input = inputsPorCategoria[categoriaId];
-    if (!input?.nome || !input?.valor || !input?.data) return;
+  async function salvarItem(categoriaNome: string) {
+    const input = inputsPorCategoria[categoriaNome]
+    if (!input?.nome || !input?.valor || !input?.data) return
 
     if (editandoId) {
-      await db.despesas.update(editandoId, {
-        nome: input.nome,
-        valor: parseFloat(input.valor),
-        data: input.data,
-        updatedAt: Date.now(),
-      });
-      setEditandoId(null);
+      // Editar despesa
+      await fetch('/api/despesas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editandoId,
+          nome: input.nome,
+          valor: input.valor,
+          data: input.data,
+          categoria: categoriaNome
+        })
+      })
+      setEditandoId(null)
     } else {
-      const nova: Despesa = {
-        id: uuidv4(),
-        categoria: categoriaId,
-        nome: input.nome,
-        valor: parseFloat(input.valor),
-        data: input.data,
-        updatedAt: Date.now(),
-      };
-      await db.despesas.add(nova);
+      // Criar despesa
+      await fetch('/api/despesas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: input.nome,
+          valor: input.valor,
+          data: input.data,
+          categoria: categoriaNome
+        })
+      })
     }
 
-    await carregarDados();
+    await carregarDados()
     setInputsPorCategoria(prev => ({
       ...prev,
-      [categoriaId]: { nome: '', valor: '', data: new Date().toISOString().split('T')[0] }
-    }));
-  };
+      [categoriaNome]: { nome: '', valor: '', data: new Date().toISOString().split('T')[0] }
+    }))
+  }
 
-  const cancelarEdicao = () => {
-    setEditandoId(null);
-  };
+  function cancelarEdicao() {
+    setEditandoId(null)
+  }
 
-  const removerItem = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este item?')) return;
-    await db.despesas.delete(id);
-    await carregarDados();
-  };
+  async function removerItem(id: string) {
+    if (!confirm('Tem certeza que deseja excluir este item?')) return
+    await fetch('/api/despesas', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    })
+    await carregarDados()
+  }
 
-  const despesasPorCategoria = (catId: string) =>
-    despesas.filter(d => d.categoria === catId);
+  const despesasPorCategoria = (catNome: string) =>
+    despesas.filter(d => d.categoria === catNome)
 
   const categoriasFiltradas = categorias.filter(cat =>
     cat.nome.toLowerCase().includes(filtro.toLowerCase())
-  );
+  )
 
   return (
     <Layout title="Despesas">
@@ -131,18 +156,18 @@ export default function DespesasPage() {
         </div>
 
         {categoriasFiltradas.map(cat => {
-          const input = inputsPorCategoria[cat.id] || {
+          const input = inputsPorCategoria[cat.nome] || {
             nome: '',
             valor: '',
             data: new Date().toISOString().split('T')[0]
-          };
-          const lista = despesasPorCategoria(cat.id);
+          }
+          const lista = despesasPorCategoria(cat.nome)
 
           return (
-            <div key={cat.id} className="border rounded p-4 space-y-4">
+            <div key={cat.nome} className="border rounded p-4 space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="font-bold text-lg">📁 {cat.nome}</h3>
-                <button onClick={() => excluirCategoria(cat.id)} className="text-red-500 text-sm">Excluir Categoria</button>
+                <button onClick={() => excluirCategoria(cat.nome)} className="text-red-500 text-sm">Excluir Categoria</button>
               </div>
 
               {lista.length === 0 ? (
@@ -170,7 +195,7 @@ export default function DespesasPage() {
                   onChange={e =>
                     setInputsPorCategoria(prev => ({
                       ...prev,
-                      [cat.id]: { ...input, nome: e.target.value }
+                      [cat.nome]: { ...input, nome: e.target.value }
                     }))
                   }
                 />
@@ -181,7 +206,7 @@ export default function DespesasPage() {
                   onChange={e =>
                     setInputsPorCategoria(prev => ({
                       ...prev,
-                      [cat.id]: { ...input, valor: e.target.value }
+                      [cat.nome]: { ...input, valor: e.target.value }
                     }))
                   }
                 />
@@ -191,7 +216,7 @@ export default function DespesasPage() {
                   onChange={e =>
                     setInputsPorCategoria(prev => ({
                       ...prev,
-                      [cat.id]: { ...input, data: e.target.value }
+                      [cat.nome]: { ...input, data: e.target.value }
                     }))
                   }
                 />
@@ -208,13 +233,13 @@ export default function DespesasPage() {
                 )}
                 <Botao
                   texto={editandoId ? 'Salvar Alterações' : 'Adicionar Item'}
-                  onClick={() => salvarItem(cat.id)}
+                  onClick={() => salvarItem(cat.nome)}
                 />
               </div>
             </div>
-          );
+          )
         })}
       </div>
     </Layout>
-  );
+  )
 }

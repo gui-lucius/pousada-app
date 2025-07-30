@@ -1,20 +1,21 @@
-import { db } from './db';
+import { prisma } from './prisma';
 import bcrypt from 'bcryptjs';
 
-// Tipo principal com tudo (inclusive updatedAt)
+// Tipo principal do usuário
 export type Usuario = {
+  id: string; // agora é id do Prisma (UUID)
   nome: string;
   senha: string;
   permissao: 'super' | 'usuario';
-  updatedAt: number;
+  updatedAt: Date;
 };
 
-// Tipo para armazenar no localStorage (sem senha e sem updatedAt)
-type UsuarioSemSenha = Omit<Usuario, 'senha' | 'updatedAt'>;
+// Versão segura para o localStorage (sem senha)
+type UsuarioSemSenha = Omit<Usuario, 'senha' | 'updatedAt' | 'id'>;
 
 const CHAVE_ATUAL = 'pousada_usuario_logado';
 
-// Salva localmente sem senha e sem updatedAt
+// 🔐 Salva no localStorage sem dados sensíveis
 function salvarUsuarioLocal(usuario: Usuario) {
   const seguro: UsuarioSemSenha = {
     nome: usuario.nome,
@@ -23,7 +24,7 @@ function salvarUsuarioLocal(usuario: Usuario) {
   localStorage.setItem(CHAVE_ATUAL, JSON.stringify(seguro));
 }
 
-// Carrega do localStorage
+// 🔐 Recupera usuário do localStorage
 function carregarUsuarioLocal(): UsuarioSemSenha | null {
   try {
     const raw = localStorage.getItem(CHAVE_ATUAL);
@@ -34,58 +35,92 @@ function carregarUsuarioLocal(): UsuarioSemSenha | null {
   }
 }
 
-// Criação de usuário (define updatedAt automaticamente)
-export async function criarUsuario(usuario: Omit<Usuario, 'updatedAt'>) {
+// 👤 Cria um novo usuário (caso não exista)
+export async function criarUsuario(usuario: Omit<Usuario, 'updatedAt' | 'id'>) {
   if (typeof window === 'undefined') return;
   if (!usuario.nome || !usuario.senha) return;
 
-  const existente = await db.usuarios.get(usuario.nome);
-  if (!existente) {
-    const hash = await bcrypt.hash(usuario.senha, 10);
-    await db.usuarios.add({
-      ...usuario,
-      senha: hash,
-      updatedAt: Date.now(),
+  try {
+    const existente = await prisma.usuario.findUnique({
+      where: { nome: usuario.nome },
     });
+    if (existente) {
+      console.warn('Usuário já existe.');
+      return;
+    }
+  } catch {
+    // continue para criar usuário
   }
+
+  const hash = await bcrypt.hash(usuario.senha, 10);
+  const novoUsuarioRaw = await prisma.usuario.create({
+    data: {
+      nome: usuario.nome,
+      senha: hash,
+      permissao: usuario.permissao,
+      updatedAt: new Date(),
+    },
+  });
+
+  // Cast explícito para permissao
+  const novoUsuario = {
+    ...novoUsuarioRaw,
+    permissao: (novoUsuarioRaw.permissao === 'super' ? 'super' : 'usuario') as 'super' | 'usuario',
+  };
+
+  salvarUsuarioLocal(novoUsuario as Usuario);
 }
 
-// Faz login e retorna os dados do usuário sem senha e updatedAt
-export async function fazerLogin(nome: string, senhaDigitada: string): Promise<UsuarioSemSenha | null> {
+// 🔑 Faz login e salva o usuário localmente (sem senha)
+export async function fazerLogin(
+  nome: string,
+  senhaDigitada: string
+): Promise<UsuarioSemSenha | null> {
   if (typeof window === 'undefined') return null;
 
-  const usuario = await db.usuarios.get(nome);
-  if (!usuario) return null;
+  try {
+    const usuarioRaw = await prisma.usuario.findUnique({
+      where: { nome },
+    });
+    if (!usuarioRaw) return null;
 
-  const senhaCorreta = await bcrypt.compare(senhaDigitada, usuario.senha);
-  if (senhaCorreta) {
-    salvarUsuarioLocal(usuario);
-    return {
-      nome: usuario.nome,
-      permissao: usuario.permissao,
+    const usuario = {
+      ...usuarioRaw,
+      permissao: (usuarioRaw.permissao === 'super' ? 'super' : 'usuario') as 'super' | 'usuario',
     };
+
+    const senhaCorreta = await bcrypt.compare(senhaDigitada, usuario.senha);
+    if (senhaCorreta) {
+      salvarUsuarioLocal(usuario as Usuario);
+      return {
+        nome: usuario.nome,
+        permissao: usuario.permissao,
+      };
+    }
+  } catch {
+    return null;
   }
 
   return null;
 }
 
-// Verifica usuário atual (local)
+// 👁️ Retorna o usuário atual logado (sem senha)
 export function usuarioAtual(): UsuarioSemSenha | null {
   if (typeof window === 'undefined') return null;
   return carregarUsuarioLocal();
 }
 
-// Verifica se é admin
+// 🛡️ Verifica se é administrador
 export function isAdmin(): boolean {
   return usuarioAtual()?.permissao === 'super';
 }
 
-// Verifica se há login
+// ✅ Verifica se há login
 export function estaLogado(): boolean {
   return !!usuarioAtual();
 }
 
-// Limpa localStorage
+// 🚪 Faz logout do sistema
 export function logout() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(CHAVE_ATUAL);

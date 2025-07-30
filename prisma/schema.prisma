@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id        String   @id @default(uuid())
+  nome      String   @unique
+  senha     String
+  permissao String
+  updatedAt DateTime @updatedAt
+}
+
+model Reserva {
+  id             String   @id @default(uuid())
+  nome           String
+  documento      String
+  telefone       String
+  email          String?
+  dataEntrada    DateTime
+  dataSaida      DateTime
+  numeroPessoas  Int
+  chale          String
+  status         String
+  valor          Float
+  observacoes    String?
+}
+
+model Despesa {
+  id        String   @id @default(uuid())
+  nome      String
+  valor     Float
+  categoria String
+  data      DateTime
+  updatedAt DateTime @updatedAt
+}
+
+model CheckIn {
+  id                    Int       @id @default(autoincrement())
+  nome                  String
+  dataNascimento        String?   // <-- novo
+  sexo                  String?   // <-- novo
+  telefone              String?   // <-- novo
+  email                 String?   // <-- novo
+  nacionalidade         String?   // <-- novo
+  documento             String?   // <-- novo
+  endereco              String?   // <-- novo
+  bairro                String?   // <-- novo
+  numero                String?   // <-- novo
+  cidade                String?   // <-- novo
+  estado                String?   // <-- novo
+  cep                   String?   // <-- novo
+  acompanhantes         Json?     // <-- novo, pode ser lista de acompanhantes
+  entrada               DateTime
+  saida                 DateTime
+  chale                 String
+  valor                 Float
+
+  valorEntrada          String?   // <-- novo
+  adultos               String?   // <-- novo
+  criancas0a3           String?   // <-- novo
+  criancas4a9           String?   // <-- novo
+  descontoPersonalizado String?   // <-- novo
+  updatedAt             DateTime  @updatedAt
+
+  consumos   Consumo[]   @relation("CheckInToConsumo")
+  checkOut   CheckOut?   @relation("CheckInCheckOut")
+}
+
+model Consumo {
+  id           String   @id @default(uuid())
+  cliente      String
+  hospede      Boolean
+  checkinId    Int
+  status       String
+  criadoEm     DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  subcomandas  Json
+
+  checkin      CheckIn  @relation("CheckInToConsumo", fields: [checkinId], references: [id])
+}
+
+model CheckOut {
+  id            String   @id @default(uuid())
+  checkinId     Int      @unique
+  dataSaidaReal DateTime
+  formaPagamento String
+  total         Float
+
+  checkin       CheckIn  @relation("CheckInCheckOut", fields: [checkinId], references: [id])
+}
+
+model PrecosConfig {
+  id              Int     @id @default(1)
+  hospedagem      Json
+  categoriasExtras Json
+  // pode adicionar mais campos conforme a necessidade
+}

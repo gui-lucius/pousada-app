@@ -1,27 +1,26 @@
+'use client';
+
 import Layout from '@/components/layout/Layout';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Botao from '@/components/ui/Botao';
 import { useState, useEffect } from 'react';
-import { db } from '@/utils/db';
 import { useApenasAdmin } from '@/utils/proteger';
 import { usuarioAtual } from '@/utils/auth';
-import bcrypt from 'bcryptjs';
 
-// Corrigido: incluído updatedAt no tipo
 type Usuario = {
+  id: string;
   nome: string;
-  senha: string;
   permissao: 'usuario' | 'super';
-  updatedAt: number;
+  updatedAt: string;
 };
 
 export default function AdminPage() {
   useApenasAdmin();
 
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [editando, setEditando] = useState<number | null>(null);
-  const [form, setForm] = useState<Omit<Usuario, 'updatedAt'>>({ nome: '', senha: '', permissao: 'usuario' });
+  const [editando, setEditando] = useState<string | null>(null);
+  const [form, setForm] = useState({ nome: '', senha: '', permissao: 'usuario' as 'usuario' | 'super' });
   const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
 
   useEffect(() => {
@@ -29,8 +28,9 @@ export default function AdminPage() {
   }, []);
 
   const carregarUsuarios = async () => {
-    const lista = await db.usuarios.toArray();
-    setUsuarios(lista);
+    const res = await fetch('/api/usuario');
+    const data = await res.json();
+    setUsuarios(data);
   };
 
   const resetarFormulario = () => {
@@ -45,41 +45,51 @@ export default function AdminPage() {
       return;
     }
 
-    const senhaCriptografada = await bcrypt.hash(form.senha, 10);
-
-    if (editando !== null) {
-      const usuarioOriginal = usuarios[editando];
-
-      const mesmaSenha = await bcrypt.compare(form.senha, usuarioOriginal.senha);
-      const novaSenha = mesmaSenha ? usuarioOriginal.senha : senhaCriptografada;
-
-      await db.usuarios.update(usuarioOriginal.nome, {
-        ...form,
-        senha: novaSenha,
-        updatedAt: Date.now(),
+    if (editando) {
+      // Editar usuário
+      const res = await fetch(`/api/usuario`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editando,
+          nome: form.nome,
+          senha: form.senha,
+          permissao: form.permissao,
+        }),
       });
+      if (!res.ok) {
+        alert('Erro ao editar usuário');
+        return;
+      }
     } else {
-      await db.usuarios.add({
-        ...form,
-        senha: senhaCriptografada,
-        updatedAt: Date.now(),
+      // Novo usuário
+      const res = await fetch('/api/usuario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
       });
+      if (!res.ok) {
+        alert('Erro ao criar usuário');
+        return;
+      }
     }
 
     resetarFormulario();
     carregarUsuarios();
   };
 
-  const handleEditar = (index: number) => {
-    const dados = usuarios[index]; // updatedAt não é necessário
-    setForm({ ...dados, senha: '' }); // senha limpa
-    setEditando(index);
+  const handleEditar = (id: string) => {
+    const usuario = usuarios.find(u => u.id === id);
+    if (!usuario) return;
+    setForm({ nome: usuario.nome, senha: '', permissao: usuario.permissao });
+    setEditando(id);
     setMostrandoFormulario(true);
   };
 
-  const handleExcluir = async (index: number) => {
+  const handleExcluir = async (id: string) => {
     const atual = usuarioAtual();
-    const alvo = usuarios[index];
+    const alvo = usuarios.find(u => u.id === id);
+    if (!alvo) return;
 
     if (atual?.nome === alvo.nome) {
       alert('Você não pode excluir seu próprio usuário!');
@@ -89,7 +99,15 @@ export default function AdminPage() {
     const confirmar = confirm(`Tem certeza que deseja excluir "${alvo.nome}"?`);
     if (!confirmar) return;
 
-    await db.usuarios.where('nome').equals(alvo.nome).delete();
+    const res = await fetch('/api/usuario', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) {
+      alert('Erro ao excluir usuário');
+      return;
+    }
     carregarUsuarios();
   };
 
@@ -122,21 +140,21 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {usuarios.map((u, i) => (
-                  <tr key={i} className="border-t border-gray-200">
+                {usuarios.map((u) => (
+                  <tr key={u.id} className="border-t border-gray-200">
                     <td className="py-2">{u.nome}</td>
                     <td>
                       {u.permissao === 'super' ? 'Super-Usuário' : 'Funcionário'}
                     </td>
                     <td className="space-x-2">
                       <button
-                        onClick={() => handleEditar(i)}
+                        onClick={() => handleEditar(u.id)}
                         className="text-blue-600 hover:underline"
                       >
                         Editar
                       </button>
                       <button
-                        onClick={() => handleExcluir(i)}
+                        onClick={() => handleExcluir(u.id)}
                         className="text-red-600 hover:underline"
                       >
                         Excluir
@@ -175,7 +193,7 @@ export default function AdminPage() {
               ]}
             />
             <div className="flex gap-4 pt-2">
-              <Botao texto={editando !== null ? 'Salvar Alterações' : 'Criar Usuário'} onClick={handleSalvar} />
+              <Botao texto={editando ? 'Salvar Alterações' : 'Criar Usuário'} onClick={handleSalvar} />
               <Botao texto="Cancelar" variant="secondary" onClick={resetarFormulario} />
             </div>
           </div>

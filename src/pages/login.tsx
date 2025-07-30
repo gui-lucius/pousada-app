@@ -1,43 +1,40 @@
-import { useState } from 'react';
-import { useRouter } from 'next/router';
-import Layout from '@/components/layout/Layout';
-import Input from '@/components/ui/Input';
-import Botao from '@/components/ui/Botao';
-import { fazerLogin, criarUsuario } from '@/utils/auth';
-import { db } from '@/utils/db';
-import Image from 'next/image';
+import { useState } from 'react'
+import { useRouter } from 'next/router'
+import Layout from '@/components/layout/Layout'
+import Input from '@/components/ui/Input'
+import Botao from '@/components/ui/Botao'
+import Image from 'next/image'
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [nome, setNome] = useState('');
-  const [senha, setSenha] = useState('');
-  const [erro, setErro] = useState('');
+  const router = useRouter()
+  const [nome, setNome] = useState('')
+  const [senha, setSenha] = useState('')
+  const [erro, setErro] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleLogin = async () => {
-    setErro('');
-
-    const usuario = await fazerLogin(nome, senha);
-
-    if (usuario) {
-      router.push('/checkin');
-    } else {
-      setErro('Usuário ou senha inválidos!');
+    setErro('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, senha }),
+      })
+      const data = await res.json()
+      if (res.ok && data.usuario) {
+        // Salva usuário no localStorage para manter a sessão
+        localStorage.setItem('pousada_usuario_logado', JSON.stringify(data.usuario))
+        // Redireciona para a página de reservas
+        router.push('/reservas')
+      } else {
+        setErro(data.error || 'Usuário ou senha inválidos!')
+      }
+    } catch {
+      setErro('Erro ao conectar ao servidor.')
     }
-  };
-
-  const resetarUsuarios = async () => {
-    if (!confirm('⚠️ Isso vai apagar todos os usuários e recriar o admin. Continuar?')) return;
-
-    await db.usuarios.clear();
-
-    await criarUsuario({
-      nome: 'admin',
-      senha: '1234',
-      permissao: 'super',
-    });
-
-    alert('✅ Usuário admin recriado com sucesso!\n\nUse:\nUsuário: admin\nSenha: 1234');
-  };
+    setLoading(false)
+  }
 
   return (
     <Layout semPadding>
@@ -63,21 +60,16 @@ export default function LoginPage() {
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
             className="text-black text-lg py-3"
+            onKeyDown={e => e.key === 'Enter' && handleLogin()}
           />
 
           {erro && <p className="text-red-600 text-base">{erro}</p>}
 
           <div className="w-full flex flex-col items-center gap-2">
-            <Botao texto="Entrar" onClick={handleLogin} />
-            <button
-              onClick={resetarUsuarios}
-              className="text-sm text-blue-600 underline"
-            >
-              Resetar usuários (dev)
-            </button>
+            <Botao texto={loading ? "Entrando..." : "Entrar"} onClick={handleLogin} disabled={loading} />
           </div>
         </div>
       </div>
     </Layout>
-  );
+  )
 }

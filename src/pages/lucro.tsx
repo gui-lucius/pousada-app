@@ -3,7 +3,17 @@
 import Layout from '@/components/layout/Layout'
 import { useApenasAdmin } from '@/utils/proteger'
 import { useEffect, useState } from 'react'
-import { db } from '@/utils/db'
+
+type Checkout = {
+  id: string
+  valor: number
+  dataSaidaReal: string
+}
+type Despesa = {
+  id: string
+  valor: number
+  data: string
+}
 
 export default function LucroPage() {
   useApenasAdmin()
@@ -13,6 +23,7 @@ export default function LucroPage() {
   const [modo, setModo] = useState<'rapido' | 'personalizado'>('rapido')
   const [faturamento, setFaturamento] = useState(0)
   const [despesas, setDespesas] = useState(0)
+  const [loading, setLoading] = useState(false)
 
   const aplicarFiltro = (inicioStr: string, fimStr: string) => {
     setInicio(inicioStr)
@@ -50,55 +61,30 @@ export default function LucroPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-
   useEffect(() => {
     if (!inicio || !fim) return
+    const fetchDados = async () => {
+      setLoading(true)
+      try {
+        // Busca faturamento (Checkouts)
+        const checkoutsRes = await fetch(`/api/checkouts?inicio=${inicio}&fim=${fim}`)
+        const checkouts: Checkout[] = await checkoutsRes.json()
+        const totalFaturamento = checkouts.reduce((sum, c) => sum + c.valor, 0)
 
-    const carregar = async () => {
-      const dataInicio = new Date(`${inicio}T00:00:00.000Z`)
-      const dataFim = new Date(`${fim}T23:59:59.999Z`)
+        // Busca despesas
+        const despesasRes = await fetch(`/api/despesas?inicio=${inicio}&fim=${fim}`)
+        const despesasLista: Despesa[] = await despesasRes.json()
+        const totalDespesas = despesasLista.reduce((sum, d) => sum + d.valor, 0)
 
-      let totalFaturado = 0
-      let totalDespesas = 0
-
-      const [checkouts, consumos, despesasLista] = await Promise.all([
-        db.checkouts.toArray(),
-        db.consumos.toArray(),
-        db.despesas.toArray()
-      ])
-
-      checkouts.forEach(c => {
-        const data = new Date(c.data)
-        if (data >= dataInicio && data <= dataFim) {
-          totalFaturado += c.valor
-        }
-      })
-
-      consumos.forEach(c => {
-        const data = new Date(c.criadoEm)
-        if (data >= dataInicio && data <= dataFim) {
-          c.subcomandas.forEach(sub => {
-            sub.itens.forEach(item => {
-              if (item.pago) {
-                totalFaturado += item.preco * item.quantidade
-              }
-            })
-          })
-        }
-      })
-
-      despesasLista.forEach(d => {
-        const data = new Date(d.data)
-        if (data >= dataInicio && data <= dataFim) {
-          totalDespesas += d.valor
-        }
-      })
-
-      setFaturamento(totalFaturado)
-      setDespesas(totalDespesas)
+        setFaturamento(totalFaturamento)
+        setDespesas(totalDespesas)
+      } catch (err) {
+        alert('Erro ao buscar dados do servidor.')
+      } finally {
+        setLoading(false)
+      }
     }
-
-    carregar()
+    fetchDados()
   }, [inicio, fim])
 
   const lucro = faturamento - despesas
@@ -133,6 +119,7 @@ export default function LucroPage() {
           <p className={`text-xl ${lucro >= 0 ? 'text-green-700' : 'text-red-700'} font-bold`}>
             🧾 Lucro: R$ {lucro.toFixed(2)}
           </p>
+          {loading && <p className="text-gray-500">Carregando...</p>}
         </div>
       </div>
     </Layout>

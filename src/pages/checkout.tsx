@@ -4,48 +4,96 @@ import { useEffect, useState } from 'react'
 import Layout from '@/components/layout/Layout'
 import Input from '@/components/ui/Input'
 import Botao from '@/components/ui/Botao'
-import { db, CheckIn, Consumo, ItemComanda } from '@/utils/db'
+
+// Defina os tipos conforme seu backend:
+type CheckIn = {
+  id: number | string
+  nome: string
+  chale: string
+  entrada: string
+  saida: string
+  valor: number
+  valorEntrada?: number
+}
+
+type ItemComanda = {
+  nome: string
+  preco: number
+  quantidade: number
+  pago: boolean
+}
+
+type Subcomanda = {
+  itens: ItemComanda[]
+}
+
+type Consumo = {
+  id: string
+  checkinId: number | string
+  subcomandas: Subcomanda[]
+  status: string
+}
 
 export default function CheckoutPage() {
   const [checkins, setCheckins] = useState<CheckIn[]>([])
   const [filtro, setFiltro] = useState('')
   const [consumos, setConsumos] = useState<Consumo[]>([])
-  const [mostrarDetalhes, setMostrarDetalhes] = useState<number | null>(null)
+  const [mostrarDetalhes, setMostrarDetalhes] = useState<number | string | null>(null)
 
+  // Buscar checkins e consumos ao carregar
   useEffect(() => {
     async function carregarDados() {
-      const cks = await db.checkins.toArray()
-      const cs = await db.consumos.toArray()
-      setCheckins(cks)
-      setConsumos(cs)
+      // Buscar checkins
+      const checkinsRes = await fetch('/api/checkin')
+      setCheckins(await checkinsRes.json())
+
+      // Buscar consumos
+      const consumosRes = await fetch('/api/consumos')
+      setConsumos(await consumosRes.json())
     }
     carregarDados()
   }, [])
 
+  // Atualizar status da comanda
   const atualizarComanda = async (comanda: Consumo) => {
-    await db.consumos.put({
-      ...comanda,
-      updatedAt: Date.now(),
+    await fetch('/api/consumos', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...comanda, status: 'fechada' }),
     })
   }
 
+  // Finalizar o checkout (fechar comandas, registrar checkout e remover checkin)
   const finalizarCheckout = async (checkin: CheckIn) => {
-    const comandas = await db.consumos.where('checkinId').equals(checkin.id).toArray()
-
-    for (const comanda of comandas) {
+    // Fechar todas as comandas do checkin
+    const comandasDoCheckin = consumos.filter(c => c.checkinId === checkin.id)
+    for (const comanda of comandasDoCheckin) {
       await atualizarComanda({ ...comanda, status: 'fechada' })
     }
 
+    // Registrar checkout
     const valorTotalHospedagem = Number(checkin.valor || 0)
-    await db.checkouts.add({
-      data: new Date().toISOString(),
-      nome: checkin.nome,
-      chale: checkin.chale,
-      valor: valorTotalHospedagem
+    await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        checkinId: checkin.id,
+        dataSaidaReal: new Date().toISOString(),
+        formaPagamento: 'Dinheiro', // ou escolha dinâmica
+        total: valorTotalHospedagem,
+      }),
     })
 
-    await db.checkins.delete(checkin.id)
-    setCheckins(await db.checkins.toArray())
+    // Remover checkin
+    await fetch('/api/checkin', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: checkin.id }),
+    })
+
+    // Atualizar lista de checkins
+    const checkinsRes = await fetch('/api/checkin')
+    setCheckins(await checkinsRes.json())
 
     alert(`✅ Check-out finalizado para ${checkin.nome}.`)
   }
@@ -62,7 +110,7 @@ export default function CheckoutPage() {
             label="Buscar por nome"
             placeholder="Digite o nome do hóspede"
             value={filtro}
-            onChange={(e) => setFiltro(e.target.value)}
+            onChange={e => setFiltro(e.target.value)}
           />
         </div>
 

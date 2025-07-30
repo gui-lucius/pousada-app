@@ -1,17 +1,17 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES2020",                  // Versão JS alvo, ES2020 é bom meio termo
     "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "allowJs": true,                    // Permite usar arquivos JS também
+    "skipLibCheck": true,               // Pula checagem de tipos de libs externas
+    "strict": true,                     // Ativa checagem rígida
+    "noEmit": true,                     // Não gera saída, pois Next cuida disso
+    "esModuleInterop": true,            // Importação compatível CommonJS/ESM
+    "module": "commonjs",               // CommonJS para rodar scripts com ts-node
+    "moduleResolution": "node",         // Resolver módulos como node
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "preserve",                  // Next lida com JSX, preserve deixa como está
     "incremental": true,
     "baseUrl": ".",
     "paths": {

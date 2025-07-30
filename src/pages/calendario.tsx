@@ -1,6 +1,7 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import Layout from '@/components/layout/Layout';
-import { db } from '@/utils/db';
 
 const chales = [
   'Chalé 1', 'Chalé 2', 'Chalé 3', 'Chalé 4', 'Chalé 5',
@@ -31,35 +32,43 @@ export default function CalendarioPage() {
 
   useEffect(() => {
     const carregar = async () => {
-      const reservas = await db.reservas.toArray();
-      const checkins = await db.checkins.toArray();
+      // Busca dados pela API do backend!
+      const reservasRes = await fetch('/api/reserva').then(res => res.json());
+      const checkinsRes = await fetch('/api/checkin').then(res => res.json());
 
       const toOcupacao = (
         item: ReservaOuCheckin,
         status: 'reservado' | 'ocupado'
       ): Ocupacao | null => {
-        try {
-          const entrada = new Date(item.dataEntrada || item.entrada || '');
-          const saida = new Date(item.dataSaida || item.saida || '');
-          return {
-            chale: item.chale,
-            de: entrada.getDate(),
-            ate: saida.getDate(),
-            mes: entrada.getMonth(),
-            ano: entrada.getFullYear(),
-            status,
-          };
-        } catch {
-          return null;
-        }
+        // Tenta pegar qualquer campo de data válido
+        const entradaStr = item.dataEntrada || item.entrada;
+        const saidaStr = item.dataSaida || item.saida;
+        if (!entradaStr || !saidaStr) return null;
+
+        const entrada = new Date(entradaStr);
+        const saida = new Date(saidaStr);
+
+        if (isNaN(entrada.getTime()) || isNaN(saida.getTime())) return null;
+
+        return {
+          chale: item.chale,
+          de: entrada.getDate(),
+          ate: saida.getDate() - 1, // -1 pois saída normalmente é no meio do dia
+          mes: entrada.getMonth(),
+          ano: entrada.getFullYear(),
+          status,
+        };
       };
 
-      const todas = [
-        ...reservas.map((r) => toOcupacao(r, 'reservado')),
-        ...checkins.map((c) => toOcupacao(c, 'ocupado')),
-      ].filter(Boolean) as Ocupacao[];
+      const reservas: Ocupacao[] = reservasRes
+        .map((r: ReservaOuCheckin) => toOcupacao(r, 'reservado'))
+        .filter(Boolean);
 
-      setOcupacoes(todas);
+      const checkins: Ocupacao[] = checkinsRes
+        .map((c: ReservaOuCheckin) => toOcupacao(c, 'ocupado'))
+        .filter(Boolean);
+
+      setOcupacoes([...reservas, ...checkins]);
     };
 
     carregar();
