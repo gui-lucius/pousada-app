@@ -6,7 +6,6 @@ import { iniciarMonitoramentoInatividade } from '@/utils/inatividade';
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     iniciarMonitoramentoInatividade();
-    // 🔄 A sincronização automática já está no db.ts e roda ao importar
   }, []);
 
   return <Component {...pageProps} />;

@@ -5,7 +5,6 @@ import Layout from '@/components/layout/Layout'
 import Input from '@/components/ui/Input'
 import Botao from '@/components/ui/Botao'
 
-// Defina os tipos conforme seu backend:
 type CheckIn = {
   id: number | string
   nome: string
@@ -40,21 +39,17 @@ export default function CheckoutPage() {
   const [consumos, setConsumos] = useState<Consumo[]>([])
   const [mostrarDetalhes, setMostrarDetalhes] = useState<number | string | null>(null)
 
-  // Buscar checkins e consumos ao carregar
   useEffect(() => {
     async function carregarDados() {
-      // Buscar checkins
       const checkinsRes = await fetch('/api/checkin')
       setCheckins(await checkinsRes.json())
 
-      // Buscar consumos
       const consumosRes = await fetch('/api/consumos')
       setConsumos(await consumosRes.json())
     }
     carregarDados()
   }, [])
 
-  // Atualizar status da comanda
   const atualizarComanda = async (comanda: Consumo) => {
     await fetch('/api/consumos', {
       method: 'PUT',
@@ -63,15 +58,12 @@ export default function CheckoutPage() {
     })
   }
 
-  // Finalizar o checkout (fechar comandas, registrar checkout e remover checkin)
   const finalizarCheckout = async (checkin: CheckIn) => {
-    // Fechar todas as comandas do checkin
     const comandasDoCheckin = consumos.filter(c => c.checkinId === checkin.id)
     for (const comanda of comandasDoCheckin) {
       await atualizarComanda({ ...comanda, status: 'fechada' })
     }
 
-    // Registrar checkout
     const valorTotalHospedagem = Number(checkin.valor || 0)
     await fetch('/api/checkout', {
       method: 'POST',
@@ -79,19 +71,17 @@ export default function CheckoutPage() {
       body: JSON.stringify({
         checkinId: checkin.id,
         dataSaidaReal: new Date().toISOString(),
-        formaPagamento: 'Dinheiro', // ou escolha dinâmica
+        formaPagamento: 'Dinheiro',
         total: valorTotalHospedagem,
       }),
     })
 
-    // Remover checkin
     await fetch('/api/checkin', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: checkin.id }),
     })
 
-    // Atualizar lista de checkins
     const checkinsRes = await fetch('/api/checkin')
     setCheckins(await checkinsRes.json())
 

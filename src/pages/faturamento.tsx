@@ -3,7 +3,6 @@
 import Layout from '@/components/layout/Layout'
 import { useApenasAdmin } from '@/utils/proteger'
 import { useEffect, useState, useCallback } from 'react'
-import { db, Checkout, Consumo } from '@/utils/db'
 
 type ItemResumo = {
   nome: string
@@ -78,19 +77,18 @@ export default function FaturamentoPage() {
     if (!inicio || !fim) return
 
     const carregarDados = async () => {
-      const dataInicio = new Date(inicio)
-      const dataFim = new Date(fim)
+      // Busca dos checkouts e consumos direto das APIs Next.js
+      const resCheckouts = await fetch(`/api/checkout?inicio=${inicio}&fim=${fim}`)
+      const checkouts = resCheckouts.ok ? await resCheckouts.json() : []
 
-      const checkouts = (await db.checkouts.allDocs({ include_docs: true })).rows.map(r => r.doc) as Checkout[]
-      const consumos = (await db.consumos.allDocs({ include_docs: true })).rows.map(r => r.doc) as Consumo[]
+      const resConsumos = await fetch(`/api/consumo?inicio=${inicio}&fim=${fim}&pago=true`)
+      const consumos = resConsumos.ok ? await resConsumos.json() : []
 
       const resumo: Record<string, Record<string, { quantidade: number; total: number }>> = {}
       let total = 0
 
-      checkouts.forEach((c: Checkout) => {
-        const data = new Date(c.data)
-        if (data < dataInicio || data > dataFim) return
-
+      // Faturamento hospedagem por checkout
+      checkouts.forEach((c: any) => {
         const categoria = 'Hospedagem'
         if (!resumo[categoria]) resumo[categoria] = {}
 
@@ -104,12 +102,12 @@ export default function FaturamentoPage() {
         total += c.valor
       })
 
-      consumos.forEach((consumo: Consumo) => {
-        const data = new Date(consumo.criadoEm)
-        if (data < dataInicio || data > dataFim) return
-
-        consumo.subcomandas.forEach(sub => {
-          sub.itens.forEach(item => {
+      // Faturamento de consumos pagos
+      consumos.forEach((consumo: any) => {
+        if (!Array.isArray(consumo.subcomandas)) return
+        consumo.subcomandas.forEach((sub: any) => {
+          if (!Array.isArray(sub.itens)) return
+          sub.itens.forEach((item: any) => {
             if (!item.pago) return
 
             const categoria = item.categoria || 'Outros'

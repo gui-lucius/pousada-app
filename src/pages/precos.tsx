@@ -57,7 +57,6 @@ export default function PrecosPage() {
   })
   const [loading, setLoading] = useState(false)
 
-  // BUSCA PREÇOS DA API
   useEffect(() => {
     const fetchPrecos = async () => {
       setLoading(true)
@@ -76,7 +75,6 @@ export default function PrecosPage() {
     fetchPrecos()
   }, [])
 
-  // SALVA PREÇOS NA API
   const salvar = async () => {
     setLoading(true)
     try {
@@ -177,7 +175,6 @@ export default function PrecosPage() {
       )
     }
 
-    // OUTRAS CATEGORIAS EXTRAS
     if (categoriasExtras[categoria]) {
       return (
         <section>

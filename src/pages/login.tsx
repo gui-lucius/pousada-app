@@ -23,9 +23,7 @@ export default function LoginPage() {
       })
       const data = await res.json()
       if (res.ok && data.usuario) {
-        // Salva usuário no localStorage para manter a sessão
         localStorage.setItem('pousada_usuario_logado', JSON.stringify(data.usuario))
-        // Redireciona para a página de reservas
         router.push('/reservas')
       } else {
         setErro(data.error || 'Usuário ou senha inválidos!')

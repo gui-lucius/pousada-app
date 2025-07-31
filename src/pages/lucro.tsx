@@ -58,7 +58,6 @@ export default function LucroPage() {
 
   useEffect(() => {
     filtrosRapidos.hoje()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -66,12 +65,10 @@ export default function LucroPage() {
     const fetchDados = async () => {
       setLoading(true)
       try {
-        // Busca faturamento (Checkouts)
         const checkoutsRes = await fetch(`/api/checkouts?inicio=${inicio}&fim=${fim}`)
         const checkouts: Checkout[] = await checkoutsRes.json()
         const totalFaturamento = checkouts.reduce((sum, c) => sum + c.valor, 0)
 
-        // Busca despesas
         const despesasRes = await fetch(`/api/despesas?inicio=${inicio}&fim=${fim}`)
         const despesasLista: Despesa[] = await despesasRes.json()
         const totalDespesas = despesasLista.reduce((sum, d) => sum + d.valor, 0)

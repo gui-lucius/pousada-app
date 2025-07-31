@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import Layout from '@/components/layout/Layout';
 
+// Lista completa dos chalés (de 1 a 10, Casa D'Água, 12, 13, 14, Campeira)
 const chales = [
   'Chalé 1', 'Chalé 2', 'Chalé 3', 'Chalé 4', 'Chalé 5',
   'Chalé 6', 'Chalé 7', 'Chalé 8', 'Chalé 9', 'Chalé 10',
-  'Casa Da Água', 'Chalé 12', 'Chalé 13', 'Chalé Campeira'
+  'Casa Da Água', 'Chalé 12', 'Chalé 13', 'Chalé 14', 'Chalé Campeira'
 ];
 
 interface Ocupacao {
@@ -32,15 +33,15 @@ export default function CalendarioPage() {
 
   useEffect(() => {
     const carregar = async () => {
-      // Busca dados pela API do backend!
-      const reservasRes = await fetch('/api/reserva').then(res => res.json());
+      // ENDPOINT CORRIGIDO
+      const reservasRes = await fetch('/api/reservas').then(res => res.json());
       const checkinsRes = await fetch('/api/checkin').then(res => res.json());
 
       const toOcupacao = (
         item: ReservaOuCheckin,
         status: 'reservado' | 'ocupado'
       ): Ocupacao | null => {
-        // Tenta pegar qualquer campo de data válido
+        // Aceita tanto dataEntrada/dataSaida (Reserva) quanto entrada/saida (CheckIn)
         const entradaStr = item.dataEntrada || item.entrada;
         const saidaStr = item.dataSaida || item.saida;
         if (!entradaStr || !saidaStr) return null;
@@ -62,11 +63,11 @@ export default function CalendarioPage() {
 
       const reservas: Ocupacao[] = reservasRes
         .map((r: ReservaOuCheckin) => toOcupacao(r, 'reservado'))
-        .filter(Boolean);
+        .filter(Boolean) as Ocupacao[];
 
       const checkins: Ocupacao[] = checkinsRes
         .map((c: ReservaOuCheckin) => toOcupacao(c, 'ocupado'))
-        .filter(Boolean);
+        .filter(Boolean) as Ocupacao[];
 
       setOcupacoes([...reservas, ...checkins]);
     };
@@ -142,7 +143,7 @@ export default function CalendarioPage() {
 
         {/* Tabela de ocupações */}
         <div className="overflow-auto border rounded shadow-sm">
-          <table className="table-fixed min-w-[900px] border-collapse text-center text-sm text-gray-800">
+          <table className="table-fixed min-w-[1100px] border-collapse text-center text-sm text-gray-800">
             <thead className="bg-gray-100 sticky top-0 z-20">
               <tr>
                 <th className="border p-2 sticky left-0 z-30 bg-gray-100">Dia</th>

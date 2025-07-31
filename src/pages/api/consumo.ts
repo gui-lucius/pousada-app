@@ -16,15 +16,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'POST') {
       const { cliente, hospede, checkinId, subcomandas } = req.body
 
-      if (!cliente || typeof hospede !== 'boolean' || !checkinId || !Array.isArray(subcomandas)) {
+      if (
+        !cliente ||
+        typeof hospede !== 'boolean' ||
+        !Array.isArray(subcomandas)
+      ) {
         return res.status(400).json({ error: 'Dados inválidos' })
       }
+
+      // Aceita checkinId como null/0/vazio para clientes avulsos
+      const checkinIdValido = hospede ? checkinId : null
 
       const nova = await prisma.consumo.create({
         data: {
           cliente,
           hospede,
-          checkinId,
+          checkinId: checkinIdValido,
           status: 'aberta',
           criadoEm: new Date(),
           subcomandas,

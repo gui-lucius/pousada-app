@@ -8,15 +8,35 @@ import Select from '@/components/ui/Select'
 import Botao from '@/components/ui/Botao'
 import { useProtegido } from '@/utils/proteger'
 
+function toDateInputValue(dateStr?: string) {
+  if (!dateStr) return '';
+  if (dateStr.includes('-')) return dateStr.substring(0, 10);
+  if (dateStr.includes('/')) {
+    const [dia, mes, ano] = dateStr.split('/');
+    return `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+  }
+  return '';
+}
+
 type Acompanhante = {
   nome: string
   criarComanda: boolean
 }
 
+function formatarDataBr(dt: string) {
+  if (!dt) return ''
+  const d = new Date(dt)
+  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+}
+
 export default function CheckInPage() {
   useProtegido()
   const router = useRouter()
-  const query = typeof window !== 'undefined' ? Object.fromEntries(new URLSearchParams(window.location.search)) : {}
+  const query = typeof window !== 'undefined'
+    ? Object.fromEntries(new URLSearchParams(window.location.search))
+    : {}
+
+  const reservaId = query.reservaId as string;
 
   const [mostrarForm, setMostrarForm] = useState(false)
   const [checkins, setCheckins] = useState<any[]>([])
@@ -43,20 +63,24 @@ export default function CheckInPage() {
   const [usarDesconto, setUsarDesconto] = useState(true)
   const [precos, setPrecos] = useState<any>(null)
 
-  // ✅ Novos campos
+  // Novos campos vindos da reserva
   const [adultos, setAdultos] = useState('1')
   const [criancas0a3, setCriancas0a3] = useState('0')
   const [criancas4a9, setCriancas4a9] = useState('0')
   const [valorEntrada, setValorEntrada] = useState('')
   const [descontoPersonalizado, setDescontoPersonalizado] = useState('')
+  const [observacoes, setObservacoes] = useState('')
 
   const chales = [
-    'Chalé 1', 'Chalé 2', 'Chalé 3', 'Chalé 4', 'Chalé 5',
-    'Chalé 6', 'Chalé 7', 'Chalé 8', 'Chalé 9', 'Chalé 10',
-    'Casa Da Água', 'Chalé 12', 'Chalé 13', 'Chalé 14, Campeira'
+    ...Array.from({ length: 10 }, (_, i) => `Chalé ${i + 1}`),
+    "Casa d'Água",
+    "Chalé 12",
+    "Chalé 13",
+    "Chalé 14",
+    "Campeira"
   ]
 
-  // BUSCA CHECKINS e PREÇOS
+  // BUSCA CHECKINS
   const carregarCheckins = async () => {
     const res = await fetch('/api/checkin')
     const lista = await res.json()
@@ -65,26 +89,33 @@ export default function CheckInPage() {
 
   useEffect(() => {
     carregarCheckins()
-    // Se tiver API de preços, troque aqui:
-    // fetch('/api/precos').then(r => r.json()).then(setPrecos)
   }, [])
 
+  // Preencher campos vindos da reserva (query)
   useEffect(() => {
-    // query manual pois useRouter não traz query para client
     if (query.nome) setNome(query.nome as string)
+    if (query.documento) setDocumento(query.documento as string)
     if (query.telefone) setTelefone(query.telefone as string)
+    if (query.email) setEmail(query.email as string)
     if (query.chale) setChale(query.chale as string)
-    if (query.entrada) setEntrada(query.entrada as string)
-    if (query.saida) setSaida(query.saida as string)
+    // Aqui o segredo:
+    if (query.entrada) setEntrada(toDateInputValue(query.entrada as string))
+    if (query.saida) setSaida(toDateInputValue(query.saida as string))
     if (query.valor) {
       setValor(query.valor as string)
       setUsarDesconto(false)
     }
-    if (query.valorEntrada) setValorEntrada(query.valorEntrada as string)
+    if (query.valorPagoAntecipado) setValorEntrada(query.valorPagoAntecipado as string)
+    if (query.criancas0a3) setCriancas0a3(query.criancas0a3 as string)
+    if (query.criancas4a9) setCriancas4a9(query.criancas4a9 as string)
+    if (query.desconto) setDescontoPersonalizado(query.desconto as string)
+    if (query.observacoes) setObservacoes(query.observacoes as string)
+    if (query.numeroPessoas) setAdultos(query.numeroPessoas as string)
     if (query.nome || query.telefone || query.chale) setMostrarForm(true)
   }, [])
 
-  // CÁLCULO AUTOMÁTICO DE VALOR
+
+  // Cálculo valor automático (quando não vem da reserva)
   useEffect(() => {
     if (!precos || !entrada || !saida || query.valor) return;
     const inicio = new Date(entrada);
@@ -94,7 +125,6 @@ export default function CheckInPage() {
     let total = 0;
     const nAdultos = parseInt(adultos || '0');
     const c49 = parseInt(criancas4a9 || '0');
-    // Esses campos dependem do seu objeto precos
     const precoAdulto = precos?.hospedagem?.maisQuatro?.comCafe || 0
     const precoCrianca4a9 = precos?.hospedagem?.criancas?.de4a9 || 0
     total += (nAdultos * precoAdulto + c49 * precoCrianca4a9) * dias;
@@ -122,11 +152,8 @@ export default function CheckInPage() {
     query.valor,
   ]);
 
-  // SALVAR CHECKIN
   const handleSalvar = async () => {
-    const checkinId = Date.now()
     const novoCheckin = {
-      id: checkinId,
       nome,
       dataNascimento,
       sexo,
@@ -140,7 +167,7 @@ export default function CheckInPage() {
       cidade,
       estado,
       cep,
-      acompanhantes: JSON.stringify(acompanhantes),
+      acompanhantes, // sem JSON.stringify
       entrada,
       saida,
       chale,
@@ -150,17 +177,30 @@ export default function CheckInPage() {
       criancas0a3,
       criancas4a9,
       descontoPersonalizado,
-      updatedAt: Date.now()
+      observacoes,
+      updatedAt: new Date().toISOString()
     }
-    // Salva Checkin
+
+    // Salva o checkin e pega o id criado pelo banco!
     const res = await fetch('/api/checkin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(novoCheckin)
     })
+
     if (res.ok) {
-      // Cria consumo/comanda relacionada ao checkin
-      const dataCriacao = new Date().toISOString()
+      const checkinCriado = await res.json(); // <- pega o objeto com id
+      const checkinId = checkinCriado.id;     // <- agora sim você tem o id do banco!
+
+      if (reservaId) {
+        await fetch('/api/reservas', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: reservaId }),
+        });
+      }
+      
+      const dataCriacao = new Date().toISOString();
       const subcomandas = [
         {
           id: `hospede-${Date.now()}`,
@@ -181,7 +221,7 @@ export default function CheckInPage() {
         body: JSON.stringify({
           cliente: chale,
           hospede: true,
-          checkinId,
+          checkinId, // agora sim está definido!
           status: 'aberta',
           criadoEm: dataCriacao,
           updatedAt: Date.now(),
@@ -194,6 +234,7 @@ export default function CheckInPage() {
       setMostrarForm(false)
     }
   }
+
 
   // EXCLUIR CHECKIN
   const excluirCheckin = async (id: number) => {
@@ -229,6 +270,7 @@ export default function CheckInPage() {
     setCriancas0a3('0')
     setCriancas4a9('0')
     setDescontoPersonalizado('')
+    setObservacoes('')
     setUsarDesconto(true)
   }
 
@@ -245,8 +287,8 @@ export default function CheckInPage() {
             <p><strong>Nome:</strong> {c.nome}</p>
             <p><strong>Telefone:</strong> {c.telefone}</p>
             <p><strong>Chalé:</strong> {c.chale}</p>
-            <p><strong>Entrada:</strong> {c.entrada}</p>
-            <p><strong>Saída:</strong> {c.saida}</p>
+            <p><strong>Entrada:</strong> {formatarDataBr(c.entrada)}</p>
+            <p><strong>Saída:</strong> {formatarDataBr(c.saida)}</p>
             <p><strong>Valor:</strong> R$ {c.valor}</p>
             <div className="flex gap-2 mt-2">
               <Botao
@@ -276,6 +318,7 @@ export default function CheckInPage() {
                 <p><strong>Crianças 0 a 3:</strong> {c.criancas0a3}</p>
                 <p><strong>Crianças 4 a 9:</strong> {c.criancas4a9}</p>
                 <p><strong>Desconto Personalizado:</strong> {c.descontoPersonalizado}%</p>
+                <p><strong>Observações:</strong> {c.observacoes}</p>
                 <p><strong>Acompanhantes:</strong></p>
                 <ul className="list-disc ml-5">
                   {(typeof c.acompanhantes === 'string' ? JSON.parse(c.acompanhantes) : c.acompanhantes)?.map((a: Acompanhante, i: number) => (
@@ -346,28 +389,13 @@ export default function CheckInPage() {
               <Input label="Entrada" type="date" value={entrada} onChange={e => setEntrada(e.target.value)} />
               <Input label="Saída" type="date" value={saida} onChange={e => setSaida(e.target.value)} />
               <Select label="Chalé" value={chale} onChange={e => setChale(e.target.value)} options={chales} />
-              {!query.valor && (
-                <>
-                  <Input label="Adultos" type="number" value={adultos} onChange={e => setAdultos(e.target.value)} />
-                  <Input label="Crianças 0 a 3 anos (grátis)" type="number" value={criancas0a3} onChange={e => setCriancas0a3(e.target.value)} />
-                  <Input label="Crianças 4 a 9 anos" type="number" value={criancas4a9} onChange={e => setCriancas4a9(e.target.value)} />
-                  <Input label="Desconto Personalizado (%)" type="number" value={descontoPersonalizado} onChange={e => setDescontoPersonalizado(e.target.value)} />
-                </>
-              )}
-              <Input
-                label="Valor pago na entrada (R$)"
-                type="number"
-                prefixoMonetario
-                value={valorEntrada}
-                onChange={e => setValorEntrada(e.target.value)}
-              />
-              <Input
-                label="Valor total (R$)"
-                type="number"
-                prefixoMonetario
-                value={valor}
-                onChange={e => setValor(e.target.value)}
-              />
+              <Input label="Adultos" type="number" value={adultos} onChange={e => setAdultos(e.target.value)} />
+              <Input label="Crianças 0 a 3 anos (grátis)" type="number" value={criancas0a3} onChange={e => setCriancas0a3(e.target.value)} />
+              <Input label="Crianças 4 a 9 anos" type="number" value={criancas4a9} onChange={e => setCriancas4a9(e.target.value)} />
+              <Input label="Desconto Personalizado (%)" type="number" value={descontoPersonalizado} onChange={e => setDescontoPersonalizado(e.target.value)} />
+              <Input label="Valor pago na entrada (R$)" type="number" prefixoMonetario value={valorEntrada} onChange={e => setValorEntrada(e.target.value)} />
+              <Input label="Valor total (R$)" type="number" prefixoMonetario value={valor} onChange={e => setValor(e.target.value)} />
+              <Input label="Observações" value={observacoes} onChange={e => setObservacoes(e.target.value)} />
               {!query.valor && (
                 <div className="col-span-full flex gap-2 items-center">
                   <input type="checkbox" id="desconto" checked={usarDesconto} onChange={e => setUsarDesconto(e.target.checked)} />

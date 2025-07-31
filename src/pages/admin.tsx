@@ -62,7 +62,6 @@ export default function AdminPage() {
         return;
       }
     } else {
-      // Novo usuário
       const res = await fetch('/api/usuario', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

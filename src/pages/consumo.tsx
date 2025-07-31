@@ -11,10 +11,10 @@ type Subcomanda = {
 };
 
 type Consumo = {
-  id: number; // id numérico vindo do Prisma
+  id: number;
   cliente: string;
   hospede: boolean;
-  checkinId: number;
+  checkinId: number | null;
   status: string;
   criadoEm: string;
   subcomandas: Subcomanda[];
@@ -24,7 +24,6 @@ export default function ListaComandas() {
   const [comandas, setComandas] = useState<Consumo[]>([]);
   const router = useRouter();
 
-  // Carrega comandas abertas ao montar componente
   useEffect(() => {
     carregarComandas();
   }, []);
@@ -41,7 +40,6 @@ export default function ListaComandas() {
     }
   }
 
-  // Cria nova comanda enviando dados mínimos que backend espera
   async function criarNova(tipo: 'cliente' | 'hospede') {
     const nome = prompt(
       tipo === 'hospede' ? 'Informe o nome do Hóspede:' : 'Informe o nome do Cliente:'
@@ -51,7 +49,7 @@ export default function ListaComandas() {
     const novaComanda = {
       cliente: nome.trim(),
       hospede: tipo === 'hospede',
-      checkinId: 0,
+      checkinId: tipo === 'hospede' ? 0 : null, // Manda null para cliente avulso
       subcomandas: [
         {
           id: `principal-${Date.now()}`,
@@ -78,7 +76,6 @@ export default function ListaComandas() {
     }
   }
 
-  // Exclui comanda pelo id numérico
   async function excluirComanda(id: number) {
     const confirmar = confirm(
       'Tem certeza que deseja excluir esta comanda?\nEsta ação não pode ser desfeita.'
@@ -99,7 +96,6 @@ export default function ListaComandas() {
     }
   }
 
-  // Calcula o total da comanda somando itens de todas subcomandas
   function calcularTotal(comanda: Consumo): number {
     return comanda.subcomandas.reduce((soma, sub) => {
       return (

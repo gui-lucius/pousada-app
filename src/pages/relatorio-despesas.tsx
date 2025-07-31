@@ -112,7 +112,7 @@ export default function RelatorioDespesas() {
           <h3 className="text-lg font-bold mb-2">🧾 Despesas Filtradas</h3>
 
           {Object.entries(agrupadasPorMes)
-            .sort(([a], [b]) => b.localeCompare(a)) // data desc
+            .sort(([a], [b]) => b.localeCompare(a)) 
             .map(([mes, lista]) => {
               const dataValida = parseISO(`${mes}-01`)
               const dataExibida = isValid(dataValida)

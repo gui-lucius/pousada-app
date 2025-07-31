@@ -14,7 +14,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'Usuário ou senha inválidos' });
   }
 
-  // Aqui está o ponto crítico: comparar a senha pura com o hash salvo no banco
   const senhaOk = await bcrypt.compare(senha, usuario.senha);
   if (!senhaOk) {
     return res.status(401).json({ error: 'Usuário ou senha inválidos' });

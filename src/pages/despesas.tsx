@@ -74,7 +74,6 @@ export default function DespesasPage() {
     if (!input?.nome || !input?.valor || !input?.data) return
 
     if (editandoId) {
-      // Editar despesa
       await fetch('/api/despesas', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -88,7 +87,6 @@ export default function DespesasPage() {
       })
       setEditandoId(null)
     } else {
-      // Criar despesa
       await fetch('/api/despesas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

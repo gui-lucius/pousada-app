@@ -16,29 +16,30 @@ export default function ComandaDetalhes() {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
   const [quantidades, setQuantidades] = useState<Record<string, number>>({});
 
-  // Buscar comanda e precos no banco via API
   useEffect(() => {
     if (!id || typeof id !== 'string') return;
 
     const carregar = async () => {
-      // Buscar comanda pelo id
       const resComanda = await fetch(`/api/consumo?id=${id}`);
       const comandaDb = await resComanda.json();
 
-      // Buscar precos/config
       const resPrecos = await fetch('/api/precos');
       const precosDb = await resPrecos.json();
 
-      setComanda(comandaDb);
+      // Sempre força subcomandas ser array
+      setComanda({
+        ...comandaDb,
+        subcomandas: Array.isArray(comandaDb.subcomandas) ? comandaDb.subcomandas : [],
+      });
       setPrecos(precosDb);
     };
     carregar();
   }, [id]);
 
-  // Atualizar comanda no banco via API
   const atualizarComanda = async (nova: any) => {
     const atualizada = {
       ...nova,
+      subcomandas: Array.isArray(nova.subcomandas) ? nova.subcomandas : [],
       updatedAt: Date.now(),
     };
     await fetch('/api/consumo', {
@@ -55,7 +56,7 @@ export default function ComandaDetalhes() {
   const adicionarItensSelecionados = () => {
     if (!comanda || !precos || !categoriaSelecionada || !subcomandaSelecionadaId) return;
 
-    const subIndex = comanda.subcomandas.findIndex((s: any) => s.id === subcomandaSelecionadaId);
+    const subIndex = (comanda.subcomandas || []).findIndex((s: any) => s.id === subcomandaSelecionadaId);
     if (subIndex === -1) return;
 
     const categoria = precos.categoriasExtras[categoriaSelecionada];
@@ -71,7 +72,7 @@ export default function ComandaDetalhes() {
         pago: false,
       }));
 
-    const subcomandas = [...comanda.subcomandas];
+    const subcomandas = [...(comanda.subcomandas || [])];
     const itensAtualizados = [...subcomandas[subIndex].itens, ...novosItens];
 
     subcomandas[subIndex] = {
@@ -93,7 +94,7 @@ export default function ComandaDetalhes() {
   ) => {
     if (!comanda) return;
 
-    const novasSubcomandas = [...comanda.subcomandas];
+    const novasSubcomandas = [...(comanda.subcomandas || [])];
     const item = { ...novasSubcomandas[subIndex].itens[itemIndex] };
 
     if (item.pago) return;
@@ -107,10 +108,10 @@ export default function ComandaDetalhes() {
 
   const removerItem = (subIndex: number, itemIndex: number) => {
     if (!comanda) return;
-    const item = comanda.subcomandas[subIndex].itens[itemIndex];
+    const item = (comanda.subcomandas || [])[subIndex].itens[itemIndex];
     if (item.pago) return;
 
-    const novasSubcomandas = [...comanda.subcomandas];
+    const novasSubcomandas = [...(comanda.subcomandas || [])];
     novasSubcomandas[subIndex].itens.splice(itemIndex, 1);
     novasSubcomandas[subIndex].total = calcularTotal(novasSubcomandas[subIndex].itens);
 
@@ -120,7 +121,7 @@ export default function ComandaDetalhes() {
   const alternarPago = (subIndex: number, itemIndex: number) => {
     if (!comanda) return;
 
-    const novasSubcomandas = [...comanda.subcomandas];
+    const novasSubcomandas = [...(comanda.subcomandas || [])];
     const item = { ...novasSubcomandas[subIndex].itens[itemIndex] };
 
     item.pago = !item.pago;
@@ -151,7 +152,7 @@ export default function ComandaDetalhes() {
         <div className="bg-white rounded shadow p-6 space-y-4">
           <h2 className="text-lg font-semibold">1️⃣ Escolha a Pessoa</h2>
           <div className="flex flex-wrap gap-3">
-            {comanda.subcomandas.map((sub: any) => (
+            {(comanda.subcomandas || []).map((sub: any) => (
               <div key={sub.id} className="flex items-center gap-2">
                 <button
                   onClick={() => setSubcomandaSelecionadaId(sub.id)}
@@ -171,7 +172,7 @@ export default function ComandaDetalhes() {
                       if (!confirm(`Remover ${sub.nome} da comanda?`)) return
                       const nova = {
                         ...comanda,
-                        subcomandas: comanda.subcomandas.filter((s: any) => s.id !== sub.id),
+                        subcomandas: (comanda.subcomandas || []).filter((s: any) => s.id !== sub.id),
                       }
                       await atualizarComanda(nova);
                       setSubcomandaSelecionadaId('');
@@ -198,7 +199,7 @@ export default function ComandaDetalhes() {
 
                 const novaComanda = {
                   ...comanda,
-                  subcomandas: [...comanda.subcomandas, novaSub],
+                  subcomandas: [...(comanda.subcomandas || []), novaSub],
                 };
 
                 await atualizarComanda(novaComanda);
@@ -297,7 +298,7 @@ export default function ComandaDetalhes() {
         )}
 
         {/* Exibir Subcomandas */}
-        {comanda.subcomandas.map((sub: any, subIndex: number) => (
+        {(comanda.subcomandas || []).map((sub: any, subIndex: number) => (
           <div key={sub.id} className="bg-white rounded shadow p-6 space-y-4">
             <h3 className="text-lg font-bold">📋 Itens de {sub.nome}</h3>
             {sub.itens.length === 0 ? (
@@ -375,7 +376,7 @@ export default function ComandaDetalhes() {
               onClick={async () => {
                 const comTodosPagos = {
                   ...comanda,
-                  subcomandas: comanda.subcomandas.map((sub: any) => ({
+                  subcomandas: (comanda.subcomandas || []).map((sub: any) => ({
                     ...sub,
                     itens: sub.itens.map((item: any) => ({ ...item, pago: true })),
                   })),
