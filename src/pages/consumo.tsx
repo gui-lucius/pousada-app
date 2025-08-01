@@ -33,7 +33,8 @@ export default function ListaComandas() {
       const res = await fetch('/api/consumo');
       if (!res.ok) throw new Error('Erro ao buscar comandas');
       const data: Consumo[] = await res.json();
-      setComandas(data);
+      // Só exibe as comandas abertas
+      setComandas(data.filter(c => c.status === 'aberta'));
     } catch (err) {
       alert('Erro ao carregar comandas');
       console.error(err);

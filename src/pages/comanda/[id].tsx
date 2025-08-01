@@ -38,7 +38,7 @@ export default function ComandaDetalhes() {
     const atualizada = {
       ...nova,
       subcomandas: Array.isArray(nova.subcomandas) ? nova.subcomandas : [],
-      updatedAt: Date.now(),
+      updatedAt: new Date().toISOString(), // <---- TROQUE AQUI
     };
     await fetch('/api/consumo', {
       method: 'PUT',
@@ -224,7 +224,7 @@ export default function ComandaDetalhes() {
                 </div>
                 <div className="pt-4 text-right">
                   <Botao texto="Adicionar à Comanda"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!comanda || !precos || !categoriaSelecionada || !subcomandaSelecionadaId) return;
                       const subIndex = (comanda.subcomandas || []).findIndex((s: any) => s.id === subcomandaSelecionadaId);
                       if (subIndex === -1) return;
@@ -239,6 +239,8 @@ export default function ComandaDetalhes() {
                           categoria: categoriaSelecionada,
                           pago: false,
                         }));
+
+                      // --- NOVO: Atualizar via API
                       const subcomandas = [...(comanda.subcomandas || [])];
                       const itensAtualizados = [...subcomandas[subIndex].itens, ...novosItens];
                       subcomandas[subIndex] = {
@@ -246,11 +248,15 @@ export default function ComandaDetalhes() {
                         itens: itensAtualizados,
                         total: calcularTotal(itensAtualizados),
                       };
-                      atualizarComanda({ ...comanda, subcomandas });
+
+                      // Espera o PUT terminar antes de atualizar o state local
+                      await atualizarComanda({ ...comanda, subcomandas });
+
                       setCategoriaSelecionada('');
                       setQuantidades({});
                     }}
                   />
+
                 </div>
               </div>
             )}
@@ -366,10 +372,11 @@ export default function ComandaDetalhes() {
                     ...sub,
                     itens: sub.itens.map((item: any) => ({ ...item, pago: true })),
                   })),
-                  status: 'paga',
+                  status: 'paga', 
                 };
                 await atualizarComanda(comTodosPagos);
                 alert('Comanda finalizada! Todos os itens foram marcados como pagos.');
+                router.push('/consumo'); 
               }}
             />
           </div>
