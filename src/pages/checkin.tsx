@@ -8,6 +8,7 @@ import Select from '@/components/ui/Select'
 import Botao from '@/components/ui/Botao'
 import { useProtegido } from '@/utils/proteger'
 
+// Converte datas para "YYYY-MM-DD" para o input date
 function toDateInputValue(dateStr?: string) {
   if (!dateStr) return '';
   if (dateStr.includes('-')) return dateStr.substring(0, 10);
@@ -18,15 +19,28 @@ function toDateInputValue(dateStr?: string) {
   return '';
 }
 
+// Sempre exibe datas como "dd/mm/aaaa" ignorando horas e timezone
+function formatarDataBr(dt: string) {
+  if (!dt) return '';
+  let soData = dt;
+  if (dt.includes('T')) soData = dt.split('T')[0];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(soData)) {
+    const [ano, mes, dia] = soData.split('-');
+    return `${dia}/${mes}/${ano}`;
+  }
+  // fallback: tenta criar date normal
+  try {
+    const d = new Date(dt);
+    if (!isNaN(+d)) {
+      return d.toLocaleDateString('pt-BR');
+    }
+  } catch {}
+  return dt;
+}
+
 type Acompanhante = {
   nome: string
   criarComanda: boolean
-}
-
-function formatarDataBr(dt: string) {
-  if (!dt) return ''
-  const d = new Date(dt)
-  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
 }
 
 export default function CheckInPage() {
@@ -62,8 +76,14 @@ export default function CheckInPage() {
   const [valor, setValor] = useState('')
   const [usarDesconto, setUsarDesconto] = useState(true)
   const [precos, setPrecos] = useState<any>(null)
+  const [comCafe, setComCafe] = useState(true);
 
-  // Novos campos vindos da reserva
+  useEffect(() => {
+    fetch('/api/precos')
+      .then(res => res.json())
+      .then(data => setPrecos(data))
+  }, [])
+
   const [adultos, setAdultos] = useState('1')
   const [criancas0a3, setCriancas0a3] = useState('0')
   const [criancas4a9, setCriancas4a9] = useState('0')
@@ -80,7 +100,6 @@ export default function CheckInPage() {
     "Campeira"
   ]
 
-  // BUSCA CHECKINS
   const carregarCheckins = async () => {
     const res = await fetch('/api/checkin')
     const lista = await res.json()
@@ -91,14 +110,13 @@ export default function CheckInPage() {
     carregarCheckins()
   }, [])
 
-  // Preencher campos vindos da reserva (query)
+  // Preenche automaticamente ao abrir pelo botão de reservas
   useEffect(() => {
     if (query.nome) setNome(query.nome as string)
     if (query.documento) setDocumento(query.documento as string)
     if (query.telefone) setTelefone(query.telefone as string)
     if (query.email) setEmail(query.email as string)
     if (query.chale) setChale(query.chale as string)
-    // Aqui o segredo:
     if (query.entrada) setEntrada(toDateInputValue(query.entrada as string))
     if (query.saida) setSaida(toDateInputValue(query.saida as string))
     if (query.valor) {
@@ -114,43 +132,56 @@ export default function CheckInPage() {
     if (query.nome || query.telefone || query.chale) setMostrarForm(true)
   }, [])
 
-
-  // Cálculo valor automático (quando não vem da reserva)
+  // Calcula valor sempre que entradas mudam
   useEffect(() => {
-    if (!precos || !entrada || !saida || query.valor) return;
-    const inicio = new Date(entrada);
-    const fim = new Date(saida);
-    const dias = Math.ceil((+fim - +inicio) / (1000 * 60 * 60 * 24));
-    if (dias <= 0) return;
-    let total = 0;
-    const nAdultos = parseInt(adultos || '0');
-    const c49 = parseInt(criancas4a9 || '0');
-    const precoAdulto = precos?.hospedagem?.maisQuatro?.comCafe || 0
-    const precoCrianca4a9 = precos?.hospedagem?.criancas?.de4a9 || 0
-    total += (nAdultos * precoAdulto + c49 * precoCrianca4a9) * dias;
-    if (
-      usarDesconto &&
-      precos?.hospedagem?.descontoReserva?.aplicar &&
-      dias >= precos?.hospedagem?.descontoReserva?.minDiarias
-    ) {
-      total *= 1 - precos.hospedagem.descontoReserva.percentual / 100;
+    if (!precos || !entrada || !saida) {
+      setValor('0')
+      return
     }
-    if (descontoPersonalizado) {
-      const perc = parseFloat(descontoPersonalizado);
-      total *= 1 - perc / 100;
+    if (query.valor) {
+      setValor(query.valor as string)
+      return
     }
-    setValor(total.toFixed(2));
+
+    const inicio = new Date(entrada)
+    const fim = new Date(saida)
+    const dias = Math.ceil((+fim - +inicio) / (1000 * 60 * 60 * 24))
+    if (dias <= 0) {
+      setValor('0')
+      return
+    }
+    const adultosNum = parseInt(adultos || '0')
+    const c03 = parseInt(criancas0a3 || '0')
+    const c49 = parseInt(criancas4a9 || '0')
+
+    const campoCafe = comCafe ? 'comCafe' : 'semCafe'
+    let valorBase = 0
+
+    if (adultosNum === 1) {
+      valorBase = precos.hospedagem.individual?.[campoCafe] || 0
+    } else if (adultosNum === 2) {
+      valorBase = precos.hospedagem.casal?.[campoCafe] || 0
+    } else if (adultosNum === 3) {
+      valorBase = precos.hospedagem.tresPessoas?.[campoCafe] || 0
+    } else if (adultosNum === 4) {
+      valorBase = precos.hospedagem.quatroPessoas?.[campoCafe] || 0
+    } else if (adultosNum > 4) {
+      valorBase = adultosNum * (precos.hospedagem.maisQuatro?.[campoCafe] || 0)
+    }
+
+    let valorCrianca49 = precos.hospedagem?.criancas?.de4a9 ? Number(precos.hospedagem.criancas.de4a9) : 0
+
+    let subtotal = valorBase * dias
+    subtotal += valorCrianca49 * c49 * dias
+
+    let descontoValor = parseFloat(descontoPersonalizado) || 0
+    if (descontoValor > 0) {
+      subtotal = subtotal * (1 - descontoValor / 100)
+    }
+    setValor(Number(subtotal).toFixed(2))
   }, [
-    usarDesconto,
-    entrada,
-    saida,
-    precos,
-    adultos,
-    criancas0a3,
-    criancas4a9,
-    descontoPersonalizado,
-    query.valor,
-  ]);
+    entrada, saida, adultos, criancas0a3, criancas4a9, descontoPersonalizado, precos, query.valor, comCafe
+  ])
 
   const handleSalvar = async () => {
     const novoCheckin = {
@@ -167,7 +198,7 @@ export default function CheckInPage() {
       cidade,
       estado,
       cep,
-      acompanhantes, // sem JSON.stringify
+      acompanhantes,
       entrada,
       saida,
       chale,
@@ -181,7 +212,6 @@ export default function CheckInPage() {
       updatedAt: new Date().toISOString()
     }
 
-    // Salva o checkin e pega o id criado pelo banco!
     const res = await fetch('/api/checkin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -189,8 +219,8 @@ export default function CheckInPage() {
     })
 
     if (res.ok) {
-      const checkinCriado = await res.json(); // <- pega o objeto com id
-      const checkinId = checkinCriado.id;     // <- agora sim você tem o id do banco!
+      const checkinCriado = await res.json();
+      const checkinId = checkinCriado.id;
 
       if (reservaId) {
         await fetch('/api/reservas', {
@@ -199,35 +229,39 @@ export default function CheckInPage() {
           body: JSON.stringify({ id: reservaId }),
         });
       }
-      
+
       const dataCriacao = new Date().toISOString();
       const subcomandas = [
         {
           id: `hospede-${Date.now()}`,
           nome: nome,
+          tipo: 'hospede',
           itens: [],
           total: 0
         },
         ...acompanhantes.filter(a => a.criarComanda).map(a => ({
           id: `acomp-${Date.now()}-${Math.random()}`,
           nome: a.nome,
+          tipo: 'acompanhante',
           itens: [],
           total: 0
         }))
-      ]
+      ];
+
       await fetch('/api/consumo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cliente: chale,
           hospede: true,
-          checkinId, // agora sim está definido!
+          checkinId,
           status: 'aberta',
           criadoEm: dataCriacao,
           updatedAt: Date.now(),
           subcomandas
         })
       })
+
       await carregarCheckins()
       alert('✅ Check-in salvo com sucesso e comanda criada!')
       resetarFormulario()
@@ -235,8 +269,6 @@ export default function CheckInPage() {
     }
   }
 
-
-  // EXCLUIR CHECKIN
   const excluirCheckin = async (id: number) => {
     await fetch('/api/checkin', {
       method: 'DELETE',
@@ -278,19 +310,30 @@ export default function CheckInPage() {
     <Layout title="Check-In">
       <div className="max-w-6xl mx-auto p-4 space-y-8">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-black">Check-ins Registrados</h2>
+          <h2 className="text-2xl font-bold text-black flex items-center gap-2">
+            <span role="img" aria-label="check-in">🛎️</span>
+            Check-ins Registrados
+            <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-bold">{checkins.length}</span>
+          </h2>
           <Botao texto="Novo Check-in" onClick={() => setMostrarForm(true)} />
         </div>
 
+        <div className="grid md:grid-cols-2 gap-5">
         {checkins.map((c: any) => (
-          <div key={c.id} className="border p-4 rounded bg-white shadow-sm text-black">
-            <p><strong>Nome:</strong> {c.nome}</p>
-            <p><strong>Telefone:</strong> {c.telefone}</p>
-            <p><strong>Chalé:</strong> {c.chale}</p>
-            <p><strong>Entrada:</strong> {formatarDataBr(c.entrada)}</p>
-            <p><strong>Saída:</strong> {formatarDataBr(c.saida)}</p>
-            <p><strong>Valor:</strong> R$ {c.valor}</p>
-            <div className="flex gap-2 mt-2">
+          <div key={c.id} className="rounded-xl shadow bg-white p-6 border border-gray-100 flex flex-col gap-1">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-blue-700 font-bold text-lg">{c.nome}</span>
+              <span className="text-blue-700 font-bold">R$ {c.valor}</span>
+            </div>
+            <div className="text-sm grid grid-cols-2 gap-x-6">
+              <span><strong>Chalé:</strong> {c.chale}</span>
+              <span><strong>Entrada:</strong> {formatarDataBr(c.entrada)}</span>
+              <span><strong>Saída:</strong> {formatarDataBr(c.saida)}</span>
+              <span><strong>Adultos:</strong> {c.adultos}</span>
+              <span><strong>Crianças 0-3:</strong> {c.criancas0a3 || 0}</span>
+              <span><strong>Crianças 4-9:</strong> {c.criancas4a9 || 0}</span>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-4">
               <Botao
                 texto={mostrarDetalhesId === c.id ? 'Ocultar Detalhes' : 'Ver Detalhes'}
                 variant="secondary"
@@ -305,8 +348,8 @@ export default function CheckInPage() {
               />
             </div>
             {mostrarDetalhesId === c.id && (
-              <div className="mt-4 border-t pt-2 text-sm space-y-1">
-                <p><strong>Data de Nascimento:</strong> {c.dataNascimento}</p>
+              <div className="mt-4 border-t pt-2 text-sm space-y-1 text-gray-700">
+                <p><strong>Data de Nascimento:</strong> {formatarDataBr(c.dataNascimento)}</p>
                 <p><strong>Sexo:</strong> {c.sexo}</p>
                 <p><strong>Email:</strong> {c.email}</p>
                 <p><strong>Nacionalidade:</strong> {c.nacionalidade}</p>
@@ -331,10 +374,14 @@ export default function CheckInPage() {
             )}
           </div>
         ))}
+        </div>
 
         {mostrarForm && (
-          <form className="space-y-6 border p-6 rounded bg-white shadow-sm">
-            <h2 className="text-lg font-semibold mb-4 text-black">Novo Check-in</h2>
+          <form className="space-y-6 border p-6 rounded-xl bg-white shadow max-w-4xl mx-auto">
+            <h2 className="text-lg font-semibold mb-4 text-black flex items-center gap-2">
+              <span role="img" aria-label="check-in">📝</span>
+              Novo Check-in
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <Input label="Nome Completo" value={nome} onChange={e => setNome(e.target.value)} />
               <Input label="Data de Nascimento" type="date" value={dataNascimento} onChange={e => setDataNascimento(e.target.value)} />
@@ -350,60 +397,26 @@ export default function CheckInPage() {
               <Input label="Estado" value={estado} onChange={e => setEstado(e.target.value)} />
               <Input label="CEP" value={cep} onChange={e => setCep(e.target.value)} />
             </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">👥 Acompanhantes</h3>
-              {acompanhantes.map((a, i) => (
-                <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                  <Input
-                    label={`Nome do Acompanhante #${i + 1}`}
-                    value={a.nome}
-                    onChange={e => {
-                      const novos = [...acompanhantes]
-                      novos[i].nome = e.target.value
-                      setAcompanhantes(novos)
-                    }}
-                  />
-                  <label className="flex items-center gap-2 mt-1 text-sm text-black">
-                    <input
-                      type="checkbox"
-                      checked={a.criarComanda || false}
-                      onChange={e => {
-                        const novos = [...acompanhantes]
-                        novos[i].criarComanda = e.target.checked
-                        setAcompanhantes(novos)
-                      }}
-                    />
-                    Criar comanda vinculada ao chalé
-                  </label>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => setAcompanhantes([...acompanhantes, { nome: '', criarComanda: false }])}
-                className="mt-2 inline-flex items-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium px-4 py-2 rounded shadow-sm transition"
-              >
-                <span className="text-lg">➕</span> Adicionar Acompanhante
-              </button>
-            </div>
+            {/* ...Acompanhantes... */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <Input label="Entrada" type="date" value={entrada} onChange={e => setEntrada(e.target.value)} />
               <Input label="Saída" type="date" value={saida} onChange={e => setSaida(e.target.value)} />
               <Select label="Chalé" value={chale} onChange={e => setChale(e.target.value)} options={chales} />
               <Input label="Adultos" type="number" value={adultos} onChange={e => setAdultos(e.target.value)} />
+              <label className="flex items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  checked={comCafe}
+                  onChange={e => setComCafe(e.target.checked)}
+                />
+                Com café da manhã
+              </label>
               <Input label="Crianças 0 a 3 anos (grátis)" type="number" value={criancas0a3} onChange={e => setCriancas0a3(e.target.value)} />
               <Input label="Crianças 4 a 9 anos" type="number" value={criancas4a9} onChange={e => setCriancas4a9(e.target.value)} />
               <Input label="Desconto Personalizado (%)" type="number" value={descontoPersonalizado} onChange={e => setDescontoPersonalizado(e.target.value)} />
               <Input label="Valor pago na entrada (R$)" type="number" prefixoMonetario value={valorEntrada} onChange={e => setValorEntrada(e.target.value)} />
               <Input label="Valor total (R$)" type="number" prefixoMonetario value={valor} onChange={e => setValor(e.target.value)} />
               <Input label="Observações" value={observacoes} onChange={e => setObservacoes(e.target.value)} />
-              {!query.valor && (
-                <div className="col-span-full flex gap-2 items-center">
-                  <input type="checkbox" id="desconto" checked={usarDesconto} onChange={e => setUsarDesconto(e.target.checked)} />
-                  <label htmlFor="desconto" className="text-sm text-black font-medium">
-                    Aplicar desconto por múltiplas diárias?
-                  </label>
-                </div>
-              )}
             </div>
             <div className="flex justify-end gap-4 pt-4">
               <Botao texto="Cancelar" variant="secondary" onClick={() => setMostrarForm(false)} />

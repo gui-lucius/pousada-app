@@ -15,7 +15,13 @@ type CategoriaResumo = {
   itens: ItemResumo[]
 }
 
-function criarFiltrosRapidos(aplicarFiltro: (inicio: string, fim: string) => void) {
+// Helper para formatar real BR
+function real(n: number) {
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, style: 'currency', currency: 'BRL' })
+}
+
+// Tabs/filtros rápidos
+function criarFiltrosRapidos(aplicarFiltro: (inicio: string, fim: string) => void, setSelectedTab: (v: string) => void) {
   return {
     hoje: () => {
       const inicio = new Date()
@@ -23,6 +29,7 @@ function criarFiltrosRapidos(aplicarFiltro: (inicio: string, fim: string) => voi
       const fim = new Date()
       fim.setHours(23, 59, 59, 999)
       aplicarFiltro(inicio.toISOString(), fim.toISOString())
+      setSelectedTab('hoje')
     },
     ultimos7: () => {
       const inicio = new Date()
@@ -31,6 +38,7 @@ function criarFiltrosRapidos(aplicarFiltro: (inicio: string, fim: string) => voi
       const fim = new Date()
       fim.setHours(23, 59, 59, 999)
       aplicarFiltro(inicio.toISOString(), fim.toISOString())
+      setSelectedTab('ultimos7')
     },
     mes: () => {
       const agora = new Date()
@@ -41,13 +49,15 @@ function criarFiltrosRapidos(aplicarFiltro: (inicio: string, fim: string) => voi
       inicio.setHours(0, 0, 0, 0)
       fim.setHours(23, 59, 59, 999)
       aplicarFiltro(inicio.toISOString(), fim.toISOString())
+      setSelectedTab('mes')
     },
     ano: () => {
       const ano = new Date().getFullYear()
       const inicio = new Date(`${ano}-01-01T00:00:00`)
       const fim = new Date(`${ano}-12-31T23:59:59.999`)
       aplicarFiltro(inicio.toISOString(), fim.toISOString())
-    },
+      setSelectedTab('ano')
+    }
   }
 }
 
@@ -57,8 +67,10 @@ export default function FaturamentoPage() {
   const [inicio, setInicio] = useState('')
   const [fim, setFim] = useState('')
   const [modo, setModo] = useState<'rapido' | 'personalizado'>('rapido')
+  const [selectedTab, setSelectedTab] = useState('hoje')
   const [categorias, setCategorias] = useState<CategoriaResumo[]>([])
   const [totalGeral, setTotalGeral] = useState(0)
+  const [loading, setLoading] = useState(false)
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [filtroItem, setFiltroItem] = useState('')
 
@@ -67,16 +79,17 @@ export default function FaturamentoPage() {
     setFim(fimStr)
   }, [])
 
-  const filtrosRapidos = criarFiltrosRapidos(aplicarFiltro)
+  const filtrosRapidos = criarFiltrosRapidos(aplicarFiltro, setSelectedTab)
 
   useEffect(() => {
     filtrosRapidos.hoje()
-  }, [filtrosRapidos])
+    // eslint-disable-next-line
+  }, [])
 
   useEffect(() => {
     if (!inicio || !fim) return
-
     const carregarDados = async () => {
+      setLoading(true)
       // Busca dos checkouts e consumos direto das APIs Next.js
       const resCheckouts = await fetch(`/api/checkout?inicio=${inicio}&fim=${fim}`)
       const checkouts = resCheckouts.ok ? await resCheckouts.json() : []
@@ -136,11 +149,12 @@ export default function FaturamentoPage() {
 
       setCategorias(categoriasFormatadas)
       setTotalGeral(total)
+      setLoading(false)
     }
-
     carregarDados()
   }, [inicio, fim])
 
+  // Filtros categoria/item
   const categoriasFiltradas = categorias
     .filter(c => !filtroCategoria || c.nome === filtroCategoria)
     .map(c => ({
@@ -154,32 +168,57 @@ export default function FaturamentoPage() {
 
   return (
     <Layout title="📊 Faturamento">
-      <div className="max-w-4xl mx-auto px-4 space-y-6 text-black">
-        <div className="flex flex-wrap gap-3 justify-center">
-          <button onClick={() => { filtrosRapidos.hoje(); setModo('rapido') }} className="bg-blue-600 text-white px-4 py-2 rounded shadow">Hoje</button>
-          <button onClick={() => { filtrosRapidos.ultimos7(); setModo('rapido') }} className="bg-blue-600 text-white px-4 py-2 rounded shadow">Últimos 7 dias</button>
-          <button onClick={() => { filtrosRapidos.mes(); setModo('rapido') }} className="bg-blue-600 text-white px-4 py-2 rounded shadow">Mês Atual</button>
-          <button onClick={() => { filtrosRapidos.ano(); setModo('rapido') }} className="bg-blue-600 text-white px-4 py-2 rounded shadow">Ano Atual</button>
-          <button onClick={() => setModo('personalizado')} className="bg-gray-300 text-black px-4 py-2 rounded shadow">Personalizado</button>
+      <div className="max-w-4xl mx-auto px-2 py-8 space-y-8 text-black">
+
+        {/* Tabs Filtros */}
+        <div className="flex flex-wrap gap-2 mb-6 justify-center">
+          <TabBtn text="Hoje"        active={selectedTab === 'hoje'}      onClick={() => { filtrosRapidos.hoje(); setModo('rapido') }}        icon="📅" />
+          <TabBtn text="Últimos 7"   active={selectedTab === 'ultimos7'}  onClick={() => { filtrosRapidos.ultimos7(); setModo('rapido') }}   icon="🗓️" />
+          <TabBtn text="Mês Atual"   active={selectedTab === 'mes'}       onClick={() => { filtrosRapidos.mes(); setModo('rapido') }}        icon="📆" />
+          <TabBtn text="Ano Atual"   active={selectedTab === 'ano'}       onClick={() => { filtrosRapidos.ano(); setModo('rapido') }}        icon="📈" />
+          <TabBtn text="Personalizado" active={modo === 'personalizado'}  onClick={() => setModo('personalizado')}                           icon="⚙️" />
         </div>
 
+        {/* Data customizada */}
         {modo === 'personalizado' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Data de Início</label>
-              <input type="date" value={inicio.slice(0, 10)} onChange={e => setInicio(e.target.value)} className="w-full border rounded px-3 py-2" />
+          <div className="flex gap-4 mb-6 items-end flex-col sm:flex-row">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold mb-1">Data de Início</label>
+              <input
+                type="date"
+                value={inicio.slice(0,10)}
+                onChange={e => setInicio(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Data de Fim</label>
-              <input type="date" value={fim.slice(0, 10)} onChange={e => setFim(e.target.value)} className="w-full border rounded px-3 py-2" />
+            <div className="flex-1">
+              <label className="block text-sm font-semibold mb-1">Data de Fim</label>
+              <input
+                type="date"
+                value={fim.slice(0,10)}
+                onChange={e => setFim(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
+            <button
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold shadow mt-4 sm:mt-0"
+              onClick={() => {
+                if (!inicio || !fim) return
+                setModo('personalizado')
+                setSelectedTab('personalizado')
+              }}
+              type="button"
+            >
+              Filtrar
+            </button>
           </div>
         )}
 
+        {/* Filtros categoria/item */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Filtrar por Categoria</label>
-            <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)} className="w-full border rounded px-3 py-2">
+            <label className="block text-sm font-medium mb-1">Filtrar por Categoria</label>
+            <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)} className="w-full border rounded-lg px-3 py-2">
               <option value="">Todas as categorias</option>
               {opcoesCategorias.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
@@ -187,8 +226,8 @@ export default function FaturamentoPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Filtrar por Item</label>
-            <select value={filtroItem} onChange={e => setFiltroItem(e.target.value)} className="w-full border rounded px-3 py-2">
+            <label className="block text-sm font-medium mb-1">Filtrar por Item</label>
+            <select value={filtroItem} onChange={e => setFiltroItem(e.target.value)} className="w-full border rounded-lg px-3 py-2">
               <option value="">Todos os itens</option>
               {opcoesItens.map(item => (
                 <option key={item} value={item}>{item}</option>
@@ -197,34 +236,70 @@ export default function FaturamentoPage() {
           </div>
         </div>
 
-        {categoriasFiltradas.map((cat, idx) => (
-          <div key={idx} className="bg-white p-4 border rounded shadow space-y-2">
-            <h3 className="text-lg font-semibold">{cat.nome}</h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="text-left p-2">Item</th>
-                  <th className="text-center p-2">Qtd</th>
-                  <th className="text-right p-2">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cat.itens.map((item, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="p-2">{item.nome}</td>
-                    <td className="p-2 text-center">{item.quantidade}</td>
-                    <td className="p-2 text-right">R$ {item.total.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Tabela das categorias */}
+        {loading ? (
+          <div className="flex items-center gap-2 text-gray-500 mt-6 animate-pulse justify-center">
+            <span className="w-4 h-4 rounded-full border-2 border-gray-300 border-t-blue-400 animate-spin inline-block"></span>
+            Carregando dados...
           </div>
-        ))}
+        ) : (
+          <>
+          {categoriasFiltradas.map((cat, idx) => (
+            <div key={idx} className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 mt-4 space-y-2 transition hover:shadow-lg">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <span className="rounded-full p-2 bg-blue-100">📁</span>
+                {cat.nome}
+              </h3>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left p-2">Item</th>
+                    <th className="text-center p-2">Qtd</th>
+                    <th className="text-right p-2">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cat.itens.map((item, i) => (
+                    <tr key={i} className="border-t hover:bg-gray-50">
+                      <td className="p-2">{item.nome}</td>
+                      <td className="p-2 text-center">{item.quantidade}</td>
+                      <td className="p-2 text-right text-blue-800 font-bold">{real(item.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+          </>
+        )}
 
-        <div className="text-center text-xl font-bold text-green-700">
-          💰 Total Geral: R$ {totalGeral.toFixed(2)}
+        {/* Card Total */}
+        <div className="flex justify-center">
+          <div className="mt-6 bg-green-50 border border-green-200 rounded-2xl px-8 py-6 flex items-center gap-4 text-2xl font-bold shadow-sm">
+            <span className="rounded-full p-2 bg-green-200 text-3xl">💰</span>
+            Total Geral:&nbsp;
+            <span className="text-green-800">{real(totalGeral)}</span>
+          </div>
         </div>
       </div>
     </Layout>
+  )
+}
+
+// TabButton reusável
+function TabBtn({ text, active, onClick, icon }: { text: string, active: boolean, onClick: () => void, icon?: string }) {
+  return (
+    <button
+      className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold border transition
+        ${active
+          ? 'bg-blue-600 text-white border-blue-700 shadow'
+          : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'}
+      `}
+      onClick={onClick}
+      type="button"
+    >
+      {icon && <span className="bg-white text-xl rounded-full">{icon}</span>}
+      {text}
+    </button>
   )
 }

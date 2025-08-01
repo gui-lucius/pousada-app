@@ -40,16 +40,13 @@ export default function ListaComandas() {
     }
   }
 
-  async function criarNova(tipo: 'cliente' | 'hospede') {
-    const nome = prompt(
-      tipo === 'hospede' ? 'Informe o nome do Hóspede:' : 'Informe o nome do Cliente:'
-    );
+  async function criarNovaCliente() {
+    const nome = prompt('Informe o nome do Cliente:');
     if (!nome || nome.trim() === '') return;
-
     const novaComanda = {
       cliente: nome.trim(),
-      hospede: tipo === 'hospede',
-      checkinId: tipo === 'hospede' ? 0 : null, // Manda null para cliente avulso
+      hospede: false,
+      checkinId: null,
       subcomandas: [
         {
           id: `principal-${Date.now()}`,
@@ -59,7 +56,6 @@ export default function ListaComandas() {
         },
       ],
     };
-
     try {
       const res = await fetch('/api/consumo', {
         method: 'POST',
@@ -97,60 +93,120 @@ export default function ListaComandas() {
   }
 
   function calcularTotal(comanda: Consumo): number {
-    return comanda.subcomandas.reduce((soma, sub) => {
-      return (
-        soma +
-        sub.itens.reduce((acc, item) => acc + item.preco * item.quantidade, 0)
-      );
-    }, 0);
+    return comanda.subcomandas.reduce((soma, sub) => (
+      soma + sub.itens.reduce((acc, item) => acc + item.preco * item.quantidade, 0)
+    ), 0);
   }
+
+  // Separar por tipo
+  const comandasHospedes = comandas.filter(c => c.hospede);
+  const comandasAvulsas = comandas.filter(c => !c.hospede);
 
   return (
     <Layout title="🧾 Comandas">
-      <div className="max-w-3xl mx-auto space-y-6 text-black px-4">
-        {/* Criar Nova Comanda */}
-        <div className="bg-white p-6 rounded shadow text-center space-y-4">
-          <h3 className="text-lg font-semibold">Criar Nova Comanda</h3>
-          <div className="flex flex-col md:flex-row justify-center gap-4">
-            <Botao texto="🧍 Cliente Avulso" onClick={() => criarNova('cliente')} />
-            <Botao texto="🏨 Hóspede da Pousada" onClick={() => criarNova('hospede')} />
+      <div className="max-w-5xl mx-auto py-8 px-4 space-y-8">
+        {/* Header e Ação */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">Comandas</h1>
+            <span className="text-gray-500 text-sm">
+              Visualize e gerencie as comandas ativas do sistema.
+            </span>
           </div>
+          <Botao
+            texto="🧍 Nova Comanda Avulsa"
+            onClick={criarNovaCliente}
+            className="px-6 py-2 font-semibold rounded-lg shadow hover:shadow-md bg-blue-600 text-white hover:bg-blue-700 transition"
+          />
+        </div>
+        <div className="bg-blue-50 p-3 rounded-lg text-blue-800 text-sm">
+          <span className="font-bold">Dica:</span> Comandas de hóspedes são criadas automaticamente ao realizar o check-in.
         </div>
 
-        {/* Lista de Comandas */}
-        <div className="bg-white p-6 rounded shadow">
-          <h2 className="text-xl font-bold mb-4">Comandas em Aberto</h2>
-
-          {comandas.length === 0 ? (
-            <p className="text-gray-500">Nenhuma comanda aberta no momento.</p>
-          ) : (
-            <ul className="space-y-3">
-              {comandas.map(c => (
-                <li
-                  key={c.id}
-                  className="border p-4 rounded flex justify-between items-center hover:bg-gray-50 transition"
-                >
-                  <div
-                    className="flex-1 hover:underline cursor-pointer"
-                    onClick={() => router.push(`/comanda/${c.id}`)}
+        {/* Cards agrupados */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Hóspedes */}
+          <div>
+            <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold">Hóspedes</span>
+              Comandas de Hóspedes
+            </h2>
+            {comandasHospedes.length === 0 ? (
+              <div className="text-gray-400 py-6 text-center border rounded-lg">Nenhuma comanda de hóspede aberta.</div>
+            ) : (
+              <ul className="space-y-3">
+                {comandasHospedes.map(c => (
+                  <li
+                    key={c.id}
+                    className="bg-white rounded-xl shadow flex flex-col sm:flex-row items-center sm:justify-between p-5 border hover:ring-2 ring-blue-400 transition"
                   >
-                    <p className="font-medium">
-                      {c.hospede ? '🏨 Hóspede' : '🧍 Cliente'}: {c.cliente}
-                    </p>
-                    <p className="text-sm text-green-700 font-bold">
-                      Total: R$ {calcularTotal(c).toFixed(2)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => excluirComanda(c.id)}
-                    className="text-red-600 hover:text-red-800 text-sm"
+                    <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => router.push(`/comanda/${c.id}`)}>
+                      <div className="w-10 h-10 bg-blue-100 text-blue-800 flex items-center justify-center rounded-full text-xl font-bold">
+                        {c.cliente.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-base text-gray-800">{c.cliente}</div>
+                        <div className="text-xs text-gray-500">Criada em: {new Date(c.criadoEm).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 mt-3 sm:mt-0">
+                      <span className="bg-green-50 text-green-700 px-2 py-1 rounded text-sm font-bold">
+                        R$ {calcularTotal(c).toFixed(2)}
+                      </span>
+                      <button
+                        onClick={() => excluirComanda(c.id)}
+                        className="ml-2 text-red-600 hover:bg-red-100 rounded p-1 transition"
+                        title="Excluir comanda"
+                      >
+                        <span className="text-xl">🗑️</span>
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {/* Avulsos */}
+          <div>
+            <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+              <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-semibold">Avulsos</span>
+              Comandas de Clientes Avulsos
+            </h2>
+            {comandasAvulsas.length === 0 ? (
+              <div className="text-gray-400 py-6 text-center border rounded-lg">Nenhuma comanda avulsa aberta.</div>
+            ) : (
+              <ul className="space-y-3">
+                {comandasAvulsas.map(c => (
+                  <li
+                    key={c.id}
+                    className="bg-white rounded-xl shadow flex flex-col sm:flex-row items-center sm:justify-between p-5 border hover:ring-2 ring-yellow-400 transition"
                   >
-                    🗑️ Excluir
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+                    <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => router.push(`/comanda/${c.id}`)}>
+                      <div className="w-10 h-10 bg-yellow-100 text-yellow-800 flex items-center justify-center rounded-full text-xl font-bold">
+                        {c.cliente.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-base text-gray-800">{c.cliente}</div>
+                        <div className="text-xs text-gray-500">Criada em: {new Date(c.criadoEm).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 mt-3 sm:mt-0">
+                      <span className="bg-green-50 text-green-700 px-2 py-1 rounded text-sm font-bold">
+                        R$ {calcularTotal(c).toFixed(2)}
+                      </span>
+                      <button
+                        onClick={() => excluirComanda(c.id)}
+                        className="ml-2 text-red-600 hover:bg-red-100 rounded p-1 transition"
+                        title="Excluir comanda"
+                      >
+                        <span className="text-xl">🗑️</span>
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
     </Layout>

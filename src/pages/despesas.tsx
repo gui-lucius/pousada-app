@@ -15,6 +15,21 @@ type Categoria = {
   nome: string
 }
 
+// Data BR bonito para listagem
+function formatarDataBr(dt: string) {
+  if (!dt) return ''
+  if (dt.includes('T')) dt = dt.split('T')[0]
+  if (/^\d{4}-\d{2}-\d{2}/.test(dt)) {
+    const [ano, mes, dia] = dt.split('-')
+    return `${dia}/${mes}/${ano}`
+  }
+  try {
+    const d = new Date(dt)
+    if (!isNaN(+d)) return d.toLocaleDateString('pt-BR')
+  } catch {}
+  return dt
+}
+
 export default function DespesasPage() {
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [despesas, setDespesas] = useState<Despesa[]>([])
@@ -25,22 +40,41 @@ export default function DespesasPage() {
   >({})
   const [editandoId, setEditandoId] = useState<string | null>(null)
 
+  // Mantém as categorias criadas pelo usuário localmente
+  const [categoriasLocais, setCategoriasLocais] = useState<string[]>([])
+
   useEffect(() => {
     carregarDados()
+    // eslint-disable-next-line
   }, [])
 
   async function carregarDados() {
     const res = await fetch('/api/despesas')
     const docs: Despesa[] = await res.json()
     setDespesas(docs)
-    const categoriasUnicas = Array.from(new Set(docs.map(d => d.categoria)))
-    setCategorias(categoriasUnicas.map(nome => ({ nome })))
+    // Junta as do banco e do local para mostrar todas
+    const nomesDasDespesas = docs.map(d => d.categoria)
+    const todasCategorias = Array.from(new Set([...nomesDasDespesas, ...categoriasLocais]))
+    setCategorias(todasCategorias.map(nome => ({ nome })))
   }
 
+  // Sempre que muda despesas, mantém categoriasLocais atualizadas
+  useEffect(() => {
+    const nomes = despesas.map(d => d.categoria)
+    setCategoriasLocais(prev => prev.filter(cat => !nomes.includes(cat)))
+    // eslint-disable-next-line
+  }, [despesas])
+
   function adicionarCategoria() {
-    if (!novaCategoria.trim()) return
-    if (categorias.find(c => c.nome === novaCategoria)) return
-    setCategorias([...categorias, { nome: novaCategoria }])
+    const nome = novaCategoria.trim()
+    if (!nome) return
+    if (categorias.some(c => c.nome === nome)) return
+    setCategorias([...categorias, { nome }])
+    setCategoriasLocais([...categoriasLocais, nome])
+    setInputsPorCategoria(prev => ({
+      ...prev,
+      [nome]: { nome: '', valor: '', data: new Date().toISOString().split('T')[0] }
+    }))
     setNovaCategoria('')
   }
 
@@ -54,6 +88,7 @@ export default function DespesasPage() {
         body: JSON.stringify({ id: d.id })
       })
     }
+    setCategoriasLocais(categoriasLocais.filter(nome => nome !== catNome))
     await carregarDados()
   }
 
@@ -80,7 +115,7 @@ export default function DespesasPage() {
         body: JSON.stringify({
           id: editandoId,
           nome: input.nome,
-          valor: input.valor,
+          valor: Number(input.valor),
           data: input.data,
           categoria: categoriaNome
         })
@@ -92,13 +127,15 @@ export default function DespesasPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nome: input.nome,
-          valor: input.valor,
+          valor: Number(input.valor),
           data: input.data,
           categoria: categoriaNome
         })
       })
     }
 
+    // Remover categoria local caso adicione a primeira despesa (passa a ser persistida)
+    setCategoriasLocais(categoriasLocais.filter(nome => nome !== categoriaNome))
     await carregarDados()
     setInputsPorCategoria(prev => ({
       ...prev,
@@ -129,9 +166,15 @@ export default function DespesasPage() {
 
   return (
     <Layout title="Despesas">
-      <div className="max-w-3xl mx-auto text-black space-y-10">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold">📉 Despesas da Pousada</h2>
+      <div className="max-w-4xl mx-auto text-black space-y-10 px-2">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <span role="img" aria-label="despesa">📉</span>
+            Despesas da Pousada
+            <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-bold">
+              {despesas.length}
+            </span>
+          </h2>
           <button
             onClick={() => window.location.href = '/relatorio-despesas'}
             className="bg-white border border-blue-600 text-blue-600 px-4 py-1 rounded hover:bg-blue-600 hover:text-white transition"
@@ -140,12 +183,12 @@ export default function DespesasPage() {
           </button>
         </div>
 
-        <div className="border rounded p-4 space-y-4">
+        <div className="border rounded-xl p-4 space-y-4 shadow bg-white">
           <h3 className="text-lg font-semibold">🔍 Filtrar Categorias</h3>
           <Input placeholder="Buscar categoria..." value={filtro} onChange={e => setFiltro(e.target.value)} />
         </div>
 
-        <div className="border rounded p-4 space-y-3">
+        <div className="border rounded-xl p-4 space-y-3 shadow bg-white">
           <h3 className="text-lg font-semibold mb-2">➕ Nova Categoria</h3>
           <div className="flex gap-2">
             <Input placeholder="Ex: Manutenção" value={novaCategoria} onChange={e => setNovaCategoria(e.target.value)} />
@@ -153,6 +196,7 @@ export default function DespesasPage() {
           </div>
         </div>
 
+        <div className="space-y-6">
         {categoriasFiltradas.map(cat => {
           const input = inputsPorCategoria[cat.nome] || {
             nome: '',
@@ -160,33 +204,46 @@ export default function DespesasPage() {
             data: new Date().toISOString().split('T')[0]
           }
           const lista = despesasPorCategoria(cat.nome)
+          const totalCategoria = lista.reduce((sum, i) => sum + i.valor, 0)
 
           return (
-            <div key={cat.nome} className="border rounded p-4 space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold text-lg">📁 {cat.nome}</h3>
-                <button onClick={() => excluirCategoria(cat.nome)} className="text-red-500 text-sm">Excluir Categoria</button>
+            <div key={cat.nome} className="rounded-xl shadow bg-white border border-gray-100 p-6 space-y-4">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-bold text-lg flex items-center gap-2">
+                  <span role="img" aria-label="cat">📁</span>
+                  {cat.nome}
+                  <span className="bg-gray-100 text-gray-600 rounded px-2 py-0.5 text-xs ml-2">{lista.length} itens</span>
+                  <span className="bg-orange-100 text-orange-700 rounded px-2 py-0.5 text-xs ml-2">Total: R$ {totalCategoria.toFixed(2)}</span>
+                </h3>
+                <button
+                  onClick={() => excluirCategoria(cat.nome)}
+                  className="text-red-600 text-xs font-semibold hover:underline"
+                >
+                  Excluir Categoria
+                </button>
               </div>
 
               {lista.length === 0 ? (
                 <p className="text-sm text-gray-500">Nenhum item adicionado ainda.</p>
               ) : (
-                <ul className="text-sm space-y-1">
+                <ul className="space-y-1">
                   {lista.map(item => (
-                    <li key={item.id} className="flex justify-between items-center">
-                      <span>
-                        • {item.nome} — R$ {item.valor.toFixed(2)} — {item.data}
+                    <li key={item.id} className="flex justify-between items-center py-1 border-b last:border-0">
+                      <span className="font-medium">
+                        <span className="text-gray-700">• {item.nome}</span>
+                        <span className="ml-3 bg-gray-50 text-gray-600 rounded px-2 py-0.5 text-xs">R$ {item.valor.toFixed(2)}</span>
+                        <span className="ml-2 text-xs text-gray-400">{formatarDataBr(item.data)}</span>
                       </span>
                       <div className="flex gap-2">
-                        <button onClick={() => editarItem(item)} className="text-blue-600 text-sm">Editar</button>
-                        <button onClick={() => removerItem(item.id)} className="text-red-500 text-sm">Excluir</button>
+                        <button onClick={() => editarItem(item)} className="text-blue-600 text-xs font-semibold hover:underline">Editar</button>
+                        <button onClick={() => removerItem(item.id)} className="text-red-500 text-xs font-semibold hover:underline">Excluir</button>
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-4">
                 <Input
                   placeholder="Nome do Item"
                   value={input.nome}
@@ -223,6 +280,7 @@ export default function DespesasPage() {
               <div className="flex justify-end gap-2">
                 {editandoId && (
                   <button
+                    type="button"
                     onClick={cancelarEdicao}
                     className="text-gray-600 underline"
                   >
@@ -237,6 +295,7 @@ export default function DespesasPage() {
             </div>
           )
         })}
+        </div>
       </div>
     </Layout>
   )

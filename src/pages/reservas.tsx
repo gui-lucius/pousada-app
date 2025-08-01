@@ -11,8 +11,8 @@ type Reserva = {
   documento: string;
   telefone: string;
   email?: string;
-  dataEntrada: string;
-  dataSaida: string;
+  dataEntrada: string; // "YYYY-MM-DD"
+  dataSaida: string;   // "YYYY-MM-DD"
   numeroPessoas: number;
   chale: string;
   valor: number;
@@ -24,11 +24,25 @@ type Reserva = {
   status: string;
 }
 
-// Formatar data para dd/mm/aaaa
+// Exibe data sempre como "dd/mm/aaaa", cortando qualquer coisa além do dia!
 function formatarDataBr(dt: string) {
   if (!dt) return ''
-  const d = new Date(dt)
-  return d.toLocaleDateString('pt-BR')
+  const soData = dt.slice(0, 10) // Sempre pega só a parte da data
+  if (/^\d{4}-\d{2}-\d{2}/.test(soData)) {
+    const [ano, mes, dia] = soData.split('-')
+    return `${dia}/${mes}/${ano}`
+  }
+  return dt
+}
+function hojeISO() {
+  const hoje = new Date()
+  hoje.setHours(0,0,0,0)
+  return hoje.toISOString().substring(0,10)
+}
+function addDiasISO(dateStr: string, dias: number) {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + dias)
+  return d.toISOString().substring(0,10)
 }
 
 export default function ReservasPage() {
@@ -36,7 +50,6 @@ export default function ReservasPage() {
   const [mostrarForm, setMostrarForm] = useState(false)
   const [reservas, setReservas] = useState<Reserva[]>([])
 
-  // Novos estados
   const [precos, setPrecos] = useState<any>(null)
   const [desconto, setDesconto] = useState('')
   const [valorPagoAntecipado, setValorPagoAntecipado] = useState('')
@@ -54,15 +67,15 @@ export default function ReservasPage() {
   const [obs, setObs] = useState('')
   const [valorTotal, setValorTotal] = useState<number>(0)
   const [reservaEditandoId, setReservaEditandoId] = useState<string | null>(null)
+  const [comCafe, setComCafe] = useState(true)
+  const [dataCorrigida, setDataCorrigida] = useState<string | null>(null)
 
-  // Buscar preços ao iniciar
   useEffect(() => {
     fetch('/api/precos')
       .then(res => res.json())
       .then(data => setPrecos(data))
   }, [])
 
-  // Chalés de 1 a 10, 11 Casa d'Água, 12 a 14 Chalés, 15 Campeira
   const opcoesChales = [
     ...Array.from({ length: 10 }, (_, i) => `Chalé ${i + 1}`),
     "Casa d'Água",
@@ -72,12 +85,20 @@ export default function ReservasPage() {
     "Campeira"
   ]
 
-  const keyPorPessoas: Record<string, string> = {
-    '1': 'individual',
-    '2': 'casal',
-    '3': 'tresPessoas',
-    '4': 'quatroPessoas'
-  }
+  useEffect(() => {
+    if (entrada && entrada < hojeISO()) {
+      setEntrada(hojeISO())
+      setDataCorrigida('A data de entrada foi ajustada para hoje.')
+      return
+    }
+    if (entrada && saida && saida <= entrada) {
+      const novaSaida = addDiasISO(entrada, 1)
+      setSaida(novaSaida)
+      setDataCorrigida('A data de saída foi ajustada para um dia após a entrada.')
+    } else {
+      setDataCorrigida(null)
+    }
+  }, [entrada, saida])
 
   const calcularValor = useCallback(() => {
     if (!entrada || !saida || !pessoas || !precos || !precos.hospedagem) {
@@ -94,8 +115,21 @@ export default function ReservasPage() {
       setValorTotal(0)
       return
     }
-    const chave = adultos > 4 ? 'maisQuatro' : keyPorPessoas[String(adultos)]
-    let valorBase = precos.hospedagem[chave]?.comCafe || 0
+
+    const campoCafe = comCafe ? 'comCafe' : 'semCafe'
+    let valorBase = 0
+
+    if (adultos <= 1) {
+      valorBase = precos.hospedagem.individual?.[campoCafe] || 0
+    } else if (adultos === 2) {
+      valorBase = precos.hospedagem.casal?.[campoCafe] || 0
+    } else if (adultos === 3) {
+      valorBase = precos.hospedagem.tresPessoas?.[campoCafe] || 0
+    } else if (adultos === 4) {
+      valorBase = precos.hospedagem.quatroPessoas?.[campoCafe] || 0
+    } else if (adultos > 4) {
+      valorBase = adultos * (precos.hospedagem.maisQuatro?.[campoCafe] || 0)
+    }
 
     let valorCrianca49 = 0
     if (precos.hospedagem.criancas?.de4a9) {
@@ -110,39 +144,23 @@ export default function ReservasPage() {
       subtotal = subtotal * (1 - descontoValor / 100)
     }
     setValorTotal(Number(subtotal.toFixed(2)))
-  }, [entrada, saida, pessoas, precos, desconto, criancas0a3, criancas4a9])
+  }, [entrada, saida, pessoas, precos, desconto, criancas0a3, criancas4a9, comCafe])
 
-  // Buscar reservas do banco
+  useEffect(() => { calcularValor() }, [calcularValor])
+
   const buscarReservas = useCallback(async () => {
     const res = await fetch('/api/reservas')
     const data = await res.json()
     setReservas(data)
   }, [])
 
-  useEffect(() => {
-    buscarReservas()
-  }, [buscarReservas])
-
-  useEffect(() => {
-    calcularValor()
-  }, [calcularValor])
+  useEffect(() => { buscarReservas() }, [buscarReservas])
 
   const limparCampos = () => {
-    setNome('')
-    setDocumento('')
-    setTelefone('')
-    setEmail('')
-    setEntrada('')
-    setSaida('')
-    setPessoas('')
-    setChale('')
-    setObs('')
-    setValorTotal(0)
-    setDesconto('')
-    setValorPagoAntecipado('')
-    setCriancas0a3('')
-    setCriancas4a9('')
-    setReservaEditandoId(null)
+    setNome(''); setDocumento(''); setTelefone(''); setEmail('')
+    setEntrada(''); setSaida(''); setPessoas(''); setChale(''); setObs('')
+    setValorTotal(0); setDesconto(''); setValorPagoAntecipado(''); setCriancas0a3(''); setCriancas4a9('')
+    setReservaEditandoId(null); setComCafe(true); setDataCorrigida(null)
   }
 
   const preencherCamposParaEditar = (reserva: Reserva) => {
@@ -151,8 +169,8 @@ export default function ReservasPage() {
     setDocumento(reserva.documento)
     setTelefone(reserva.telefone)
     setEmail(reserva.email ?? '')
-    setEntrada(reserva.dataEntrada.substring(0, 10))
-    setSaida(reserva.dataSaida.substring(0, 10))
+    setEntrada(reserva.dataEntrada.slice(0, 10)) // Pega só a data, nunca hora
+    setSaida(reserva.dataSaida.slice(0, 10))
     setPessoas(reserva.numeroPessoas.toString())
     setChale(reserva.chale)
     setObs(reserva.observacoes ?? '')
@@ -161,7 +179,9 @@ export default function ReservasPage() {
     setValorPagoAntecipado(String(reserva.valorPagoAntecipado ?? ''))
     setCriancas0a3(String(reserva.criancas0a3 ?? ''))
     setCriancas4a9(String(reserva.criancas4a9 ?? ''))
+    setComCafe(true)
     setMostrarForm(true)
+    setDataCorrigida(null)
   }
 
   const handleReservar = async () => {
@@ -174,8 +194,8 @@ export default function ReservasPage() {
       documento: documento.trim(),
       telefone: telefone.trim(),
       email: email.trim(),
-      dataEntrada: entrada,
-      dataSaida: saida,
+      dataEntrada: entrada, // "YYYY-MM-DD"
+      dataSaida: saida,     // "YYYY-MM-DD"
       numeroPessoas: Number(pessoas),
       chale,
       valor: valorTotal,
@@ -218,120 +238,144 @@ export default function ReservasPage() {
 
   return (
     <Layout title="Reservas">
-      <div className="max-w-3xl mx-auto space-y-8 text-black">
-        <div>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">📅 Reservas Registradas</h2>
-            <button
-              onClick={() => {
-                limparCampos()
-                setMostrarForm(true)
-              }}
-              className="bg-blue-600 text-white px-4 py-2 rounded shadow"
-            >
-              ➕ Nova Reserva
-            </button>
-          </div>
-          {reservas.length === 0 ? (
-            <p className="text-gray-500">Nenhuma reserva registrada ainda.</p>
-          ) : (
-            <div className="space-y-4">
-              {reservas.map((r) => (
-                <div key={r.id} className="border p-4 rounded bg-white shadow-sm">
-                  <p><strong>Nome:</strong> {r.nome}</p>
-                  <p><strong>Documento:</strong> {r.documento}</p>
-                  <p><strong>Telefone:</strong> {r.telefone}</p>
-                  <p><strong>Email:</strong> {r.email ?? '-'}</p>
-                  <p><strong>Chalé:</strong> {r.chale}</p>
-                  <p><strong>Entrada:</strong> {formatarDataBr(r.dataEntrada)}</p>
-                  <p><strong>Saída:</strong> {formatarDataBr(r.dataSaida)}</p>
-                  <p><strong>Valor:</strong> R$ {r.valor}</p>
-                  <p><strong>Desconto:</strong> {r.desconto ? `${r.desconto}%` : 'Nenhum'}</p>
-                  <p><strong>Valor Antecipado:</strong> R$ {r.valorPagoAntecipado || 0}</p>
-                  <p><strong>Adultos:</strong> {r.numeroPessoas}</p>
-                  <p><strong>Crianças até 3 anos:</strong> {r.criancas0a3 || 0}</p>
-                  <p><strong>Crianças 4-9 anos:</strong> {r.criancas4a9 || 0}</p>
-                  <p><strong>Observações:</strong> {r.observacoes}</p>
-                  <div className="flex gap-2 mt-2">
-                    <Botao
-                      texto="✅ Fazer Check-in"
-                      onClick={() => {
-                        router.push(
-                          `/checkin?reservaId=${r.id}`
-                          + `&nome=${encodeURIComponent(r.nome)}`
-                          + `&documento=${encodeURIComponent(r.documento)}`
-                          + `&telefone=${encodeURIComponent(r.telefone)}`
-                          + `&email=${encodeURIComponent(r.email ?? '')}`
-                          + `&chale=${encodeURIComponent(r.chale)}`
-                          + `&entrada=${encodeURIComponent(r.dataEntrada)}`
-                          + `&saida=${encodeURIComponent(r.dataSaida)}`
-                          + `&valor=${encodeURIComponent(String(r.valor))}`
-                          + `&valorPagoAntecipado=${encodeURIComponent(String(r.valorPagoAntecipado ?? 0))}`
-                          + `&desconto=${encodeURIComponent(String(r.desconto ?? 0))}`
-                          + `&criancas0a3=${encodeURIComponent(String(r.criancas0a3 ?? 0))}`
-                          + `&criancas4a9=${encodeURIComponent(String(r.criancas4a9 ?? 0))}`
-                          + `&observacoes=${encodeURIComponent(r.observacoes ?? '')}`
-                          + `&numeroPessoas=${encodeURIComponent(r.numeroPessoas)}`
-                        )
-                      }}
-                    />
-
-                    <button
-                      onClick={() => preencherCamposParaEditar(r)}
-                      className="bg-yellow-400 text-black px-4 py-2 rounded"
-                    >
-                      ✏️ Editar
-                    </button>
-                    <button
-                      onClick={() => cancelarReserva(r.id)}
-                      className="bg-red-500 text-white px-4 py-2 rounded"
-                    >
-                      ❌ Cancelar
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      <div className="max-w-4xl mx-auto space-y-8 text-black px-2">
+        {/* HEADER */}
+        <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            📅 Reservas Registradas
+            <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-bold">{reservas.length}</span>
+          </h2>
+          <button
+            onClick={() => { limparCampos(); setMostrarForm(true) }}
+            className="bg-blue-600 text-white px-4 py-2 rounded shadow font-semibold flex items-center gap-2 hover:bg-blue-700 transition"
+          >
+            ➕ Nova Reserva
+          </button>
         </div>
 
+        {/* LISTAGEM DE RESERVAS */}
+        {reservas.length === 0 ? (
+          <p className="text-gray-400">Nenhuma reserva registrada ainda.</p>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-5">
+            {reservas.map((r) => (
+              <div key={r.id} className="rounded-xl shadow bg-white p-6 space-y-1 border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="inline-block text-blue-700 font-bold text-lg">{r.nome}</span>
+                    <span className={`ml-2 text-xs px-2 py-1 rounded-full font-bold
+                      ${r.status === 'reservado' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                      {r.status === 'reservado' ? 'Reservado' : r.status}
+                    </span>
+                  </div>
+                  <span className="text-blue-700 font-bold">R$ {Number(r.valor).toFixed(2)}</span>
+                </div>
+                <div className="text-sm grid grid-cols-2 gap-x-6">
+                  <span><strong>Chalé:</strong> {r.chale}</span>
+                  <span><strong>Entrada:</strong> {formatarDataBr(r.dataEntrada)}</span>
+                  <span><strong>Saída:</strong> {formatarDataBr(r.dataSaida)}</span>
+                  <span><strong>Adultos:</strong> {r.numeroPessoas}</span>
+                  <span><strong>Crianças 0-3:</strong> {r.criancas0a3 || 0}</span>
+                  <span><strong>Crianças 4-9:</strong> {r.criancas4a9 || 0}</span>
+                </div>
+                <div className="text-xs mt-2 text-gray-500">{r.observacoes}</div>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <Botao
+                    texto="✅ Fazer Check-in"
+                    onClick={() => {
+                      router.push(
+                        `/checkin?reservaId=${r.id}` +
+                        `&nome=${encodeURIComponent(r.nome)}` +
+                        `&documento=${encodeURIComponent(r.documento)}` +
+                        `&telefone=${encodeURIComponent(r.telefone)}` +
+                        `&email=${encodeURIComponent(r.email ?? '')}` +
+                        `&chale=${encodeURIComponent(r.chale)}` +
+                        `&entrada=${encodeURIComponent(r.dataEntrada)}` +
+                        `&saida=${encodeURIComponent(r.dataSaida)}` +
+                        `&valor=${encodeURIComponent(String(r.valor))}` +
+                        `&valorPagoAntecipado=${encodeURIComponent(String(r.valorPagoAntecipado ?? 0))}` +
+                        `&desconto=${encodeURIComponent(String(r.desconto ?? 0))}` +
+                        `&criancas0a3=${encodeURIComponent(String(r.criancas0a3 ?? 0))}` +
+                        `&criancas4a9=${encodeURIComponent(String(r.criancas4a9 ?? 0))}` +
+                        `&observacoes=${encodeURIComponent(r.observacoes ?? '')}` +
+                        `&numeroPessoas=${encodeURIComponent(r.numeroPessoas)}`
+                      )
+                    }}
+                  />
+                  <button
+                    onClick={() => preencherCamposParaEditar(r)}
+                    className="bg-yellow-400 text-black px-4 py-2 rounded font-semibold"
+                  >
+                    ✏️ Editar
+                  </button>
+                  <button
+                    onClick={() => cancelarReserva(r.id)}
+                    className="bg-red-500 text-white px-4 py-2 rounded font-semibold"
+                  >
+                    ❌ Cancelar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* FORMULÁRIO DE NOVA/EDITAR RESERVA */}
         {mostrarForm && (
-          <div className="border p-6 rounded bg-white shadow-sm space-y-4">
-            <h2 className="text-lg font-semibold mb-2">
+          <div className="border rounded-xl bg-white shadow p-8 space-y-5 max-w-xl mx-auto">
+            <h2 className="text-xl font-bold mb-4">
               {reservaEditandoId ? '✏️ Editar Reserva' : '📝 Nova Reserva'}
             </h2>
-            <Input label="Nome do Hóspede *" value={nome} onChange={e => setNome(e.target.value)} />
-            <Input label="Documento *" value={documento} onChange={e => setDocumento(e.target.value)} />
-            <Input label="Telefone" value={telefone} onChange={e => setTelefone(e.target.value)} />
-            <Input label="Email" value={email} onChange={e => setEmail(e.target.value)} />
-            <Input label="Data de Entrada *" type="date" value={entrada} onChange={e => setEntrada(e.target.value)} />
-            <Input label="Data de Saída *" type="date" value={saida} onChange={e => setSaida(e.target.value)} />
-            <Input label="Nº de Pessoas (Adultos) *" type="number" min={0} value={pessoas} onChange={e => setPessoas(e.target.value)} />
-
-            <Select
-              label="Chalé *"
-              value={chale}
-              onChange={e => setChale(e.target.value)}
-              options={['Selecione...', ...opcoesChales]}
-            />
-
-            <Input label="Crianças até 3 anos (não paga)" type="number" min={0} value={criancas0a3} onChange={e => setCriancas0a3(e.target.value)} />
-            <Input label="Crianças 4 a 9 anos" type="number" min={0} value={criancas4a9} onChange={e => setCriancas4a9(e.target.value)} />
-
-            <Input label="Desconto (%)" type="number" min={0} max={100} value={desconto} onChange={e => setDesconto(e.target.value)} />
-            <Input label="Valor Pago Antecipado" type="number" min={0} value={valorPagoAntecipado} onChange={e => setValorPagoAntecipado(e.target.value)} />
-
-            <Input label="Observações" value={obs} onChange={e => setObs(e.target.value)} />
-            <div className="text-right font-bold">
-              💰 Valor Estimado: R$ {valorTotal.toFixed(2)}
+            {dataCorrigida && (
+              <div className="bg-yellow-100 border-l-4 border-yellow-400 text-yellow-700 px-4 py-2 rounded mb-2">
+                {dataCorrigida}
+              </div>
+            )}
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input label="Nome do Hóspede *" value={nome} onChange={e => setNome(e.target.value)} />
+              <Input label="Documento *" value={documento} onChange={e => setDocumento(e.target.value)} />
+              <Input label="Telefone" value={telefone} onChange={e => setTelefone(e.target.value)} />
+              <Input label="Email" value={email} onChange={e => setEmail(e.target.value)} />
+              <Input
+                label="Data de Entrada *"
+                type="date"
+                value={entrada}
+                min={hojeISO()}
+                onChange={e => setEntrada(e.target.value)}
+              />
+              <Input
+                label="Data de Saída *"
+                type="date"
+                value={saida}
+                min={entrada ? addDiasISO(entrada, 1) : hojeISO()}
+                onChange={e => setSaida(e.target.value)}
+              />
+              <Input label="Nº de Pessoas (Adultos) *" type="number" min={0} value={pessoas} onChange={e => setPessoas(e.target.value)} />
+              <Select
+                label="Chalé *"
+                value={chale}
+                onChange={e => setChale(e.target.value)}
+                options={['Selecione...', ...opcoesChales]}
+              />
+              <Input label="Crianças até 3 anos (não paga)" type="number" min={0} value={criancas0a3} onChange={e => setCriancas0a3(e.target.value)} />
+              <Input label="Crianças 4 a 9 anos" type="number" min={0} value={criancas4a9} onChange={e => setCriancas4a9(e.target.value)} />
+              <Input label="Desconto (%)" type="number" min={0} max={100} value={desconto} onChange={e => setDesconto(e.target.value)} />
+              <Input label="Valor Pago Antecipado" type="number" min={0} value={valorPagoAntecipado} onChange={e => setValorPagoAntecipado(e.target.value)} />
             </div>
-            <div className="flex justify-end gap-2">
+            <div>
+              <label className="flex items-center gap-2 mt-2">
+                <input type="checkbox" checked={comCafe} onChange={e => setComCafe(e.target.checked)} />
+                Com café da manhã
+              </label>
+              <Input label="Observações" value={obs} onChange={e => setObs(e.target.value)} />
+            </div>
+            <div className="text-right font-bold text-xl mb-2">
+              💰 Valor Estimado: <span className="bg-green-100 text-green-800 px-3 py-1 rounded-lg ml-2">R$ {valorTotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-end gap-3">
               <button
-                onClick={() => {
-                  limparCampos()
-                  setMostrarForm(false)
-                }}
-                className="text-gray-600 border border-gray-400 px-4 py-2 rounded"
+                onClick={() => { limparCampos(); setMostrarForm(false) }}
+                className="text-gray-700 border border-gray-400 px-4 py-2 rounded hover:bg-gray-100"
               >
                 Cancelar
               </button>
