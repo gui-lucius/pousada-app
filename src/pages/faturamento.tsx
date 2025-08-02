@@ -4,25 +4,42 @@ import Layout from '@/components/layout/Layout'
 import { useApenasAdmin } from '@/utils/proteger'
 import { useEffect, useState, useCallback } from 'react'
 
+// Resumo de faturamento
 type ItemResumo = {
   nome: string
   quantidade: number
   total: number
 }
-
 type CategoriaResumo = {
   nome: string
   itens: ItemResumo[]
 }
 
-// Helper para formatar real BR
+// Formatador de moeda BR
 function real(n: number) {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, style: 'currency', currency: 'BRL' })
 }
 
-// Tabs/filtros rápidos
-function criarFiltrosRapidos(aplicarFiltro: (inicio: string, fim: string) => void, setSelectedTab: (v: string) => void) {
-  return {
+export default function FaturamentoPage() {
+  useApenasAdmin()
+
+  const [inicio, setInicio] = useState('')
+  const [fim, setFim] = useState('')
+  const [modo, setModo] = useState<'rapido' | 'personalizado'>('rapido')
+  const [selectedTab, setSelectedTab] = useState('hoje')
+  const [categorias, setCategorias] = useState<CategoriaResumo[]>([])
+  const [totalGeral, setTotalGeral] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [filtroItem, setFiltroItem] = useState('')
+
+  // Função para aplicar filtros rápidos (hoje, mês, ano, etc)
+  const aplicarFiltro = useCallback((inicioStr: string, fimStr: string) => {
+    setInicio(inicioStr)
+    setFim(fimStr)
+  }, [])
+
+  const filtrosRapidos = {
     hoje: () => {
       const inicio = new Date()
       inicio.setHours(0, 0, 0, 0)
@@ -59,77 +76,51 @@ function criarFiltrosRapidos(aplicarFiltro: (inicio: string, fim: string) => voi
       setSelectedTab('ano')
     }
   }
-}
 
-export default function FaturamentoPage() {
-  useApenasAdmin()
+  // Carrega "hoje" ao abrir
+  useEffect(() => { filtrosRapidos.hoje() }, [])
 
-  const [inicio, setInicio] = useState('')
-  const [fim, setFim] = useState('')
-  const [modo, setModo] = useState<'rapido' | 'personalizado'>('rapido')
-  const [selectedTab, setSelectedTab] = useState('hoje')
-  const [categorias, setCategorias] = useState<CategoriaResumo[]>([])
-  const [totalGeral, setTotalGeral] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [filtroCategoria, setFiltroCategoria] = useState('')
-  const [filtroItem, setFiltroItem] = useState('')
-
-  const aplicarFiltro = useCallback((inicioStr: string, fimStr: string) => {
-    setInicio(inicioStr)
-    setFim(fimStr)
-  }, [])
-
-  const filtrosRapidos = criarFiltrosRapidos(aplicarFiltro, setSelectedTab)
-
-  useEffect(() => {
-    filtrosRapidos.hoje()
-    // eslint-disable-next-line
-  }, [])
-
+  // Carrega os dados toda vez que muda o período
   useEffect(() => {
     if (!inicio || !fim) return
     const carregarDados = async () => {
       setLoading(true)
-      // Busca dos checkouts e consumos direto das APIs Next.js
+      // 1. CHECKOUTS: Faturamento de hospedagem e fechamento (não some consumos internos de hóspedes!)
       const resCheckouts = await fetch(`/api/checkout?inicio=${inicio}&fim=${fim}`)
       const checkouts = resCheckouts.ok ? await resCheckouts.json() : []
 
-      const resConsumos = await fetch(`/api/consumo?inicio=${inicio}&fim=${fim}&pago=true`)
-      const consumos = resConsumos.ok ? await resConsumos.json() : []
+      // 2. CONSUMOS AVULSOS: Comandas pagas que não têm checkin (avulso de restaurante, etc)
+      const resConsumosAvulsos = await fetch(`/api/consumo?inicio=${inicio}&fim=${fim}&pago=true&avulso=true`)
+      const consumosAvulsos = resConsumosAvulsos.ok ? await resConsumosAvulsos.json() : []
 
+      // 3. OUTROS: Aqui tu pode adicionar outras fontes, se quiser (ex: vendas externas)
+
+      // Monta resumo
       const resumo: Record<string, Record<string, { quantidade: number; total: number }>> = {}
       let total = 0
 
-      // Faturamento hospedagem por checkout
+      // 1. CHECKOUTS (Hospedagem e fechamento de comandas de hóspedes)
       checkouts.forEach((c: any) => {
+        // Supondo que c.total já inclui tudo de hospedagem + consumos do hóspede
         const categoria = 'Hospedagem'
         if (!resumo[categoria]) resumo[categoria] = {}
-
         const chave = c.chale || 'Chalé'
-        if (!resumo[categoria][chave]) {
-          resumo[categoria][chave] = { quantidade: 0, total: 0 }
-        }
-
+        if (!resumo[categoria][chave]) resumo[categoria][chave] = { quantidade: 0, total: 0 }
         resumo[categoria][chave].quantidade += 1
-        resumo[categoria][chave].total += c.valor
-        total += c.valor
+        resumo[categoria][chave].total += c.total // Usar "total" do checkout, não somar itens separados!
+        total += c.total
       })
 
-      // Faturamento de consumos pagos
-      consumos.forEach((consumo: any) => {
+      // 2. CONSUMOS AVULSOS (comandas pagas e não vinculadas a checkin)
+      consumosAvulsos.forEach((consumo: any) => {
         if (!Array.isArray(consumo.subcomandas)) return
         consumo.subcomandas.forEach((sub: any) => {
           if (!Array.isArray(sub.itens)) return
           sub.itens.forEach((item: any) => {
             if (!item.pago) return
-
-            const categoria = item.categoria || 'Outros'
+            const categoria = item.categoria || 'Consumos Avulsos'
             if (!resumo[categoria]) resumo[categoria] = {}
-
-            if (!resumo[categoria][item.nome]) {
-              resumo[categoria][item.nome] = { quantidade: 0, total: 0 }
-            }
-
+            if (!resumo[categoria][item.nome]) resumo[categoria][item.nome] = { quantidade: 0, total: 0 }
             const subtotal = item.preco * item.quantidade
             resumo[categoria][item.nome].quantidade += item.quantidade
             resumo[categoria][item.nome].total += subtotal
@@ -138,6 +129,7 @@ export default function FaturamentoPage() {
         })
       })
 
+      // Mapeia categorias para a tela
       const categoriasFormatadas: CategoriaResumo[] = Object.entries(resumo).map(([nome, itens]) => ({
         nome,
         itens: Object.entries(itens).map(([itemNome, dados]) => ({

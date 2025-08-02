@@ -68,7 +68,7 @@ model CheckIn {
   criancas0a3           String?
   criancas4a9           String?
   descontoPersonalizado String?
-  observacoes           String?    // <-- Agora está correto, sem caracteres inválidos
+  observacoes           String?
   updatedAt             DateTime   @updatedAt
 
   consumos   Consumo[]   @relation("CheckInToConsumo")
@@ -85,7 +85,7 @@ model Consumo {
   updatedAt    DateTime  @updatedAt
   subcomandas  Json
 
-  checkin      CheckIn?  @relation("CheckInToConsumo", fields: [checkinId], references: [id])
+  checkin      CheckIn?  @relation("CheckInToConsumo", fields: [checkinId], references: [id], onDelete: Cascade)
 }
 
 model CheckOut {
@@ -95,7 +95,7 @@ model CheckOut {
   formaPagamento String
   total         Float
 
-  checkin       CheckIn  @relation("CheckInCheckOut", fields: [checkinId], references: [id])
+  checkin       CheckIn  @relation("CheckInCheckOut", fields: [checkinId], references: [id], onDelete: Cascade)
 }
 
 model PrecosConfig {

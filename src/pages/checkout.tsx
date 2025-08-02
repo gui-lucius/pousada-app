@@ -65,7 +65,7 @@ export default function CheckoutPage() {
       ...sub,
       itens: sub.itens.map((item) => ({ ...item, pago: true })),
     }))
-    await fetch('/api/consumos', {
+    await fetch('/api/consumo', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...comanda, status: 'fechada', subcomandas: subcomandasAtualizadas }),

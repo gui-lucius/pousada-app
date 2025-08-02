@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Layout from '@/components/layout/Layout';
 
-// Nomes EXATOS como usados no banco
 const chales = [
   'Chalé 1', 'Chalé 2', 'Chalé 3', 'Chalé 4', 'Chalé 5',
   'Chalé 6', 'Chalé 7', 'Chalé 8', 'Chalé 9', 'Chalé 10',
@@ -13,8 +12,7 @@ const chales = [
 type Fonte = 'reservado' | 'ocupado' | 'checkout';
 interface Ocupacao {
   chale: string;
-  de: number;
-  ate: number;
+  dia: number;
   mes: number;
   ano: number;
   status: Fonte;
@@ -41,19 +39,15 @@ export default function CalendarioPage() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Padroniza o nome do chalé pra comparar array/banco
   function normalizeChaleNome(str: string): string {
     if (!str) return '';
-    // Remover acentos, lowercase, simplificar
     const limpa = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s/g, '');
     if (limpa.includes('campeira')) return 'Chalé Campeira';
     if (limpa.includes('casadaagua')) return 'Casa Da Água';
-    // Padrão para "Chalé XX"
     if (limpa.startsWith('chale')) {
       const num = str.match(/\d+/);
       if (num && chales.includes('Chalé ' + num[0])) return 'Chalé ' + num[0];
     }
-    // Exatamente igual?
     const encontrado = chales.find(c =>
       c.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s/g, '') === limpa
     );
@@ -79,53 +73,58 @@ export default function CalendarioPage() {
           checkoutsRes = [];
         }
 
-        // Debug log
-        // console.log('[RESERVAS]', reservasRes);
+        console.log("RESERVAS:", reservasRes);
+        console.log("CHECKINS:", checkinsRes);
+        console.log("CHECKOUTS:", checkoutsRes);
 
-        const toOcupacao = (
-          item: ReservaOuCheckin,
-          status: Fonte
-        ): Ocupacao | null => {
+        function expandirDias(item: ReservaOuCheckin, status: Fonte): Ocupacao[] {
           const chaleNormalizado = normalizeChaleNome(item.chale || '');
           const entradaStr = item.dataEntrada || item.entrada;
           const saidaStr = item.dataSaida || item.saida;
-          if (!entradaStr || !saidaStr) return null;
-          const entrada = new Date(entradaStr);
-          const saida = new Date(saidaStr);
-          if (isNaN(entrada.getTime()) || isNaN(saida.getTime())) return null;
+          if (!entradaStr || !saidaStr) return [];
+          // Sempre pega só AAAA-MM-DD, nunca hora!
+          const entradaArr = entradaStr.slice(0, 10).split('-').map(Number);
+          const saidaArr = saidaStr.slice(0, 10).split('-').map(Number);
+
+          // Cria datas SEM hora, para garantir que sempre pega só o dia local
+          let entrada = new Date(entradaArr[0], entradaArr[1] - 1, entradaArr[2]);
+          let saida = new Date(saidaArr[0], saidaArr[1] - 1, saidaArr[2]);
+          if (saida <= entrada) return [];
+
+          const ocupacoes: Ocupacao[] = [];
+          let dt = new Date(entrada);
+          while (dt < saida) {
+            ocupacoes.push({
+              chale: chaleNormalizado,
+              dia: dt.getDate(),
+              mes: dt.getMonth(),
+              ano: dt.getFullYear(),
+              status,
+              nome: item.nome || undefined,
+            });
+            // Adiciona UM dia, mas sempre mantendo como data local sem hora
+            dt = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + 1);
+          }
+          return ocupacoes;
+        }
+
+
+        function expandirCheckout(c: Checkout): Ocupacao {
+          const chaleNormalizado = normalizeChaleNome(c.chale);
+          const saida = new Date(c.dataSaidaReal);
           return {
             chale: chaleNormalizado,
-            de: entrada.getDate(),
-            ate: saida.getDate() - 1,
-            mes: entrada.getMonth(),
-            ano: entrada.getFullYear(),
-            status,
-            nome: item.nome || undefined,
+            dia: saida.getDate(),
+            mes: saida.getMonth(),
+            ano: saida.getFullYear(),
+            status: 'checkout',
+            nome: c.nome,
           };
-        };
+        }
 
-        const reservas: Ocupacao[] = reservasRes
-          .map((r: ReservaOuCheckin) => toOcupacao(r, 'reservado'))
-          .filter(Boolean) as Ocupacao[];
-
-        const checkins: Ocupacao[] = checkinsRes
-          .map((c: ReservaOuCheckin) => toOcupacao(c, 'ocupado'))
-          .filter(Boolean) as Ocupacao[];
-
-        const checkouts: Ocupacao[] = checkoutsRes
-          .map((c: Checkout) => {
-            const chaleNormalizado = normalizeChaleNome(c.chale);
-            const saida = new Date(c.dataSaidaReal);
-            return {
-              chale: chaleNormalizado,
-              de: saida.getDate(),
-              ate: saida.getDate(),
-              mes: saida.getMonth(),
-              ano: saida.getFullYear(),
-              status: 'checkout' as Fonte,
-              nome: c.nome,
-            };
-          });
+        const reservas: Ocupacao[] = reservasRes.flatMap((r: ReservaOuCheckin) => expandirDias(r, 'reservado'));
+        const checkins: Ocupacao[] = checkinsRes.flatMap((c: ReservaOuCheckin) => expandirDias(c, 'ocupado'));
+        const checkouts: Ocupacao[] = checkoutsRes.map(expandirCheckout);
 
         setOcupacoes([...reservas, ...checkins, ...checkouts]);
       } catch (e) {
@@ -142,21 +141,21 @@ export default function CalendarioPage() {
     (_, i) => i + 1
   );
 
+  // Prioridade: ocupado > reservado > checkout > livre
   const getStatus = (chale: string, dia: number): { status: Fonte | 'livre', nomes: string[] } => {
     const ocupacoesDoDia = ocupacoes.filter(
       (o) =>
         o.chale === chale &&
         o.mes === mesAtual.getMonth() &&
         o.ano === mesAtual.getFullYear() &&
-        dia >= o.de &&
-        dia <= o.ate
+        o.dia === dia
     );
-    if (ocupacoesDoDia.some((o) => o.status === 'checkout'))
-      return { status: 'checkout', nomes: ocupacoesDoDia.filter(o => o.status === 'checkout').map(o => o.nome || '') };
     if (ocupacoesDoDia.some((o) => o.status === 'ocupado'))
       return { status: 'ocupado', nomes: ocupacoesDoDia.filter(o => o.status === 'ocupado').map(o => o.nome || '') };
     if (ocupacoesDoDia.some((o) => o.status === 'reservado'))
       return { status: 'reservado', nomes: ocupacoesDoDia.filter(o => o.status === 'reservado').map(o => o.nome || '') };
+    if (ocupacoesDoDia.some((o) => o.status === 'checkout'))
+      return { status: 'checkout', nomes: ocupacoesDoDia.filter(o => o.status === 'checkout').map(o => o.nome || '') };
     return { status: 'livre', nomes: [] };
   };
 
@@ -173,8 +172,8 @@ export default function CalendarioPage() {
 
   const statusInfo = {
     livre: { bg: 'bg-white', text: 'text-gray-700', desc: 'Livre' },
-    reservado: { bg: 'bg-yellow-400', text: 'text-yellow-900', desc: 'Reservado' },
-    ocupado: { bg: 'bg-red-500', text: 'text-white', desc: 'Ocupado' },
+    reservado: { bg: 'bg-yellow-300', text: 'text-yellow-900', desc: 'Reservado' },
+    ocupado: { bg: 'bg-red-500', text: 'text-black', desc: 'Ocupado' },
     checkout: { bg: 'bg-green-200', text: 'text-green-900', desc: 'Check-out Realizado' },
   };
 
@@ -198,6 +197,7 @@ export default function CalendarioPage() {
             </button>
           </div>
         </div>
+        {/* LEGENDA: vai mostrar todas as cores incluindo "Ocupado" */}
         <div className="flex gap-4 text-sm text-gray-700 mb-5 flex-wrap">
           {Object.entries(statusInfo).map(([key, { bg, text, desc }]) => (
             <div key={key} className="flex items-center gap-2">
@@ -239,9 +239,19 @@ export default function CalendarioPage() {
                         {status === 'checkout' && (
                           <span title="Check-out realizado" className="text-lg font-bold">✓</span>
                         )}
-                        {nomes.length > 0 && (
-                          <span className="absolute inset-x-1 bottom-1 truncate text-[10px] text-gray-900 font-semibold">
-                            {nomes.join(', ').slice(0, 16)}{nomes.join(', ').length > 16 && '...'}
+                        {status !== 'livre' && (
+                          <span
+                            className={`
+                              absolute inset-x-1 bottom-1 truncate text-[10px]
+                              font-semibold
+                              ${status === 'ocupado' ? 'text-white' : 'text-gray-900'}
+                            `}
+                            title={nomes.length > 0
+                              ? `${desc}: ${nomes.join(', ')}`
+                              : desc}
+                          >
+                            {nomes.length > 0 ? nomes.join(', ').slice(0, 18) : desc}
+                            {nomes.join(', ').length > 18 && '...'}
                           </span>
                         )}
                       </td>

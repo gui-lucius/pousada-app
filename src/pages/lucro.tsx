@@ -6,8 +6,13 @@ import { useEffect, useState } from 'react'
 
 type Checkout = {
   id: string
-  valor: number
+  total: number   // <-- Use sempre o "total" do checkout
   dataSaidaReal: string
+}
+type ConsumoAvulso = {
+  id: string
+  valor: number
+  criadoEm: string
 }
 type Despesa = {
   id: string
@@ -26,29 +31,31 @@ export default function LucroPage() {
   const [despesas, setDespesas] = useState(0)
   const [loading, setLoading] = useState(false)
 
-  // Helper format
   function real(n: number) {
     return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, style: 'currency', currency: 'BRL' })
   }
 
-  // Filtros
+  // Filtros rápidos (hoje, últimos 7, mês, ano)
   const aplicarFiltro = (inicioStr: string, fimStr: string) => {
     setInicio(inicioStr)
     setFim(fimStr)
   }
-
   const filtrosRapidos = {
     hoje: () => {
       const hoje = new Date()
-      const iso = hoje.toISOString().split('T')[0]
-      aplicarFiltro(iso, iso)
+      hoje.setHours(0, 0, 0, 0)
+      const fim = new Date()
+      fim.setHours(23, 59, 59, 999)
+      aplicarFiltro(hoje.toISOString().slice(0,10), fim.toISOString().slice(0,10))
       setSelectedTab('hoje')
     },
     ultimos7: () => {
-      const hoje = new Date()
-      const sete = new Date()
-      sete.setDate(hoje.getDate() - 6)
-      aplicarFiltro(sete.toISOString().split('T')[0], hoje.toISOString().split('T')[0])
+      const fim = new Date()
+      fim.setHours(23, 59, 59, 999)
+      const inicio = new Date()
+      inicio.setDate(fim.getDate() - 6)
+      inicio.setHours(0, 0, 0, 0)
+      aplicarFiltro(inicio.toISOString().slice(0,10), fim.toISOString().slice(0,10))
       setSelectedTab('ultimos7')
     },
     mes: () => {
@@ -57,7 +64,9 @@ export default function LucroPage() {
       const mes = agora.getMonth()
       const inicio = new Date(ano, mes, 1)
       const fim = new Date(ano, mes + 1, 0)
-      aplicarFiltro(inicio.toISOString().split('T')[0], fim.toISOString().split('T')[0])
+      inicio.setHours(0, 0, 0, 0)
+      fim.setHours(23, 59, 59, 999)
+      aplicarFiltro(inicio.toISOString().slice(0,10), fim.toISOString().slice(0,10))
       setSelectedTab('mes')
     },
     ano: () => {
@@ -67,20 +76,26 @@ export default function LucroPage() {
     }
   }
 
-  useEffect(() => {
-    filtrosRapidos.hoje()
-    // eslint-disable-next-line
-  }, [])
+  useEffect(() => { filtrosRapidos.hoje() }, [])
 
   useEffect(() => {
     if (!inicio || !fim) return
     const fetchDados = async () => {
       setLoading(true)
       try {
-        const checkoutsRes = await fetch(`/api/checkouts?inicio=${inicio}&fim=${fim}`)
+        // 1. Faturamento: checkouts (total) + consumos avulsos pagos
+        const checkoutsRes = await fetch(`/api/checkout?inicio=${inicio}&fim=${fim}`)
         const checkouts: Checkout[] = await checkoutsRes.json()
-        const totalFaturamento = checkouts.reduce((sum, c) => sum + c.valor, 0)
 
+        const avulsosRes = await fetch(`/api/consumo?inicio=${inicio}&fim=${fim}&pago=true&avulso=true`)
+        const consumosAvulsos: ConsumoAvulso[] = await avulsosRes.json()
+
+        // Use sempre .total de checkout (para evitar somar consumos já inclusos)
+        const totalCheckouts = checkouts.reduce((sum, c) => sum + (c.total || 0), 0)
+        const totalAvulsos = consumosAvulsos.reduce((sum, a) => sum + (a.valor || 0), 0)
+        const totalFaturamento = totalCheckouts + totalAvulsos
+
+        // 2. Despesas
         const despesasRes = await fetch(`/api/despesas?inicio=${inicio}&fim=${fim}`)
         const despesasLista: Despesa[] = await despesasRes.json()
         const totalDespesas = despesasLista.reduce((sum, d) => sum + d.valor, 0)
@@ -104,36 +119,11 @@ export default function LucroPage() {
       <div className="max-w-2xl mx-auto px-2 py-8 text-black">
         {/* Filtros em Tabs */}
         <div className="flex flex-wrap gap-2 mb-8 justify-center">
-          <TabBtn
-            text="Hoje"
-            active={selectedTab === 'hoje'}
-            onClick={() => { filtrosRapidos.hoje(); setModo('rapido') }}
-            icon="📅"
-          />
-          <TabBtn
-            text="Últimos 7 dias"
-            active={selectedTab === 'ultimos7'}
-            onClick={() => { filtrosRapidos.ultimos7(); setModo('rapido') }}
-            icon="🗓️"
-          />
-          <TabBtn
-            text="Mês Atual"
-            active={selectedTab === 'mes'}
-            onClick={() => { filtrosRapidos.mes(); setModo('rapido') }}
-            icon="📆"
-          />
-          <TabBtn
-            text="Ano Atual"
-            active={selectedTab === 'ano'}
-            onClick={() => { filtrosRapidos.ano(); setModo('rapido') }}
-            icon="📈"
-          />
-          <TabBtn
-            text="Personalizado"
-            active={modo === 'personalizado'}
-            onClick={() => setModo('personalizado')}
-            icon="⚙️"
-          />
+          <TabBtn text="Hoje"        active={selectedTab === 'hoje'}      onClick={() => { filtrosRapidos.hoje(); setModo('rapido') }}        icon="📅" />
+          <TabBtn text="Últimos 7"   active={selectedTab === 'ultimos7'}  onClick={() => { filtrosRapidos.ultimos7(); setModo('rapido') }}   icon="🗓️" />
+          <TabBtn text="Mês Atual"   active={selectedTab === 'mes'}       onClick={() => { filtrosRapidos.mes(); setModo('rapido') }}        icon="📆" />
+          <TabBtn text="Ano Atual"   active={selectedTab === 'ano'}       onClick={() => { filtrosRapidos.ano(); setModo('rapido') }}        icon="📈" />
+          <TabBtn text="Personalizado" active={modo === 'personalizado'}  onClick={() => setModo('personalizado')}                           icon="⚙️" />
         </div>
 
         {/* Campo de data customizado */}
@@ -225,7 +215,7 @@ function TabBtn({ text, active, onClick, icon }: { text: string, active: boolean
   )
 }
 
-// Linha resumo (componentizado pra manter padrão e facilitar alterações futuras)
+// Linha resumo (componentizado pra manter padrão)
 function ResumoRow({
   label,
   icon,
