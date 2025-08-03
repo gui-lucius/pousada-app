@@ -4,7 +4,7 @@ import Layout from '@/components/layout/Layout'
 import { useApenasAdmin } from '@/utils/proteger'
 import { useEffect, useState, useCallback } from 'react'
 
-// Resumo de faturamento
+// Tipos de resumo
 type ItemResumo = {
   nome: string
   quantidade: number
@@ -85,36 +85,66 @@ export default function FaturamentoPage() {
     if (!inicio || !fim) return
     const carregarDados = async () => {
       setLoading(true)
-      // 1. CHECKOUTS: Faturamento de hospedagem e fechamento (não some consumos internos de hóspedes!)
+      // 1. CHECKOUTS (Hóspedes): pega hospedagem + consumos ligados ao hóspede
       const resCheckouts = await fetch(`/api/checkout?inicio=${inicio}&fim=${fim}`)
       const checkouts = resCheckouts.ok ? await resCheckouts.json() : []
 
-      // 2. CONSUMOS AVULSOS: Comandas pagas que não têm checkin (avulso de restaurante, etc)
+      // 2. CONSUMOS AVULSOS: Comandas avulsas pagas (não vinculadas a checkin)
       const resConsumosAvulsos = await fetch(`/api/consumo?inicio=${inicio}&fim=${fim}&pago=true&avulso=true`)
       const consumosAvulsos = resConsumosAvulsos.ok ? await resConsumosAvulsos.json() : []
 
-      // 3. OUTROS: Aqui tu pode adicionar outras fontes, se quiser (ex: vendas externas)
-
-      // Monta resumo
+      // --------------- MONTA O RESUMO FINAL -------------------
       const resumo: Record<string, Record<string, { quantidade: number; total: number }>> = {}
       let total = 0
 
-      // 1. CHECKOUTS (Hospedagem e fechamento de comandas de hóspedes)
+      // Dentro do forEach de checkouts
       checkouts.forEach((c: any) => {
-        // Supondo que c.total já inclui tudo de hospedagem + consumos do hóspede
-        const categoria = 'Hospedagem'
-        if (!resumo[categoria]) resumo[categoria] = {}
-        const chave = c.chale || 'Chalé'
-        if (!resumo[categoria][chave]) resumo[categoria][chave] = { quantidade: 0, total: 0 }
-        resumo[categoria][chave].quantidade += 1
-        resumo[categoria][chave].total += c.total // Usar "total" do checkout, não somar itens separados!
-        total += c.total
+        // 1. Hospedagem
+        const categoriaHospedagem = 'Hospedagem'
+        if (!resumo[categoriaHospedagem]) resumo[categoriaHospedagem] = {}
+        const nomeChale = c.checkin?.chale || 'Chalé'
+        if (!resumo[categoriaHospedagem][nomeChale]) resumo[categoriaHospedagem][nomeChale] = { quantidade: 0, total: 0 }
+        resumo[categoriaHospedagem][nomeChale].quantidade += 1
+        resumo[categoriaHospedagem][nomeChale].total += c.checkin?.valor || 0
+        total += c.checkin?.valor || 0
+
+        // 2. Consumos (igual já estava fazendo)
+        if (c.checkin && Array.isArray(c.checkin.consumos)) {
+          c.checkin.consumos.forEach((consumo: any) => {
+            let subs = []
+            try {
+              subs = Array.isArray(consumo.subcomandas)
+                ? consumo.subcomandas
+                : JSON.parse(consumo.subcomandas)
+            } catch { subs = [] }
+            subs.forEach((sub: any) => {
+              if (!Array.isArray(sub.itens)) return
+              sub.itens.forEach((item: any) => {
+                if (!item.pago) return
+                const categoria = item.categoria || 'Consumo Interno'
+                if (!resumo[categoria]) resumo[categoria] = {}
+                if (!resumo[categoria][item.nome]) resumo[categoria][item.nome] = { quantidade: 0, total: 0 }
+                const subtotal = item.preco * item.quantidade
+                resumo[categoria][item.nome].quantidade += item.quantidade
+                resumo[categoria][item.nome].total += subtotal
+                total += subtotal
+              })
+            })
+          })
+        }
       })
 
-      // 2. CONSUMOS AVULSOS (comandas pagas e não vinculadas a checkin)
+      // 2. Consumos Avulsos (sem checkin)
       consumosAvulsos.forEach((consumo: any) => {
-        if (!Array.isArray(consumo.subcomandas)) return
-        consumo.subcomandas.forEach((sub: any) => {
+        let subs = []
+        try {
+          subs = Array.isArray(consumo.subcomandas)
+            ? consumo.subcomandas
+            : JSON.parse(consumo.subcomandas)
+        } catch {
+          subs = []
+        }
+        subs.forEach((sub: any) => {
           if (!Array.isArray(sub.itens)) return
           sub.itens.forEach((item: any) => {
             if (!item.pago) return
@@ -129,7 +159,7 @@ export default function FaturamentoPage() {
         })
       })
 
-      // Mapeia categorias para a tela
+      // Mapeia para exibição
       const categoriasFormatadas: CategoriaResumo[] = Object.entries(resumo).map(([nome, itens]) => ({
         nome,
         itens: Object.entries(itens).map(([itemNome, dados]) => ({
@@ -161,7 +191,6 @@ export default function FaturamentoPage() {
   return (
     <Layout title="📊 Faturamento">
       <div className="max-w-4xl mx-auto px-2 py-8 space-y-8 text-black">
-
         {/* Tabs Filtros */}
         <div className="flex flex-wrap gap-2 mb-6 justify-center">
           <TabBtn text="Hoje"        active={selectedTab === 'hoje'}      onClick={() => { filtrosRapidos.hoje(); setModo('rapido') }}        icon="📅" />
@@ -170,7 +199,6 @@ export default function FaturamentoPage() {
           <TabBtn text="Ano Atual"   active={selectedTab === 'ano'}       onClick={() => { filtrosRapidos.ano(); setModo('rapido') }}        icon="📈" />
           <TabBtn text="Personalizado" active={modo === 'personalizado'}  onClick={() => setModo('personalizado')}                           icon="⚙️" />
         </div>
-
         {/* Data customizada */}
         {modo === 'personalizado' && (
           <div className="flex gap-4 mb-6 items-end flex-col sm:flex-row">
@@ -205,7 +233,6 @@ export default function FaturamentoPage() {
             </button>
           </div>
         )}
-
         {/* Filtros categoria/item */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -227,7 +254,6 @@ export default function FaturamentoPage() {
             </select>
           </div>
         </div>
-
         {/* Tabela das categorias */}
         {loading ? (
           <div className="flex items-center gap-2 text-gray-500 mt-6 animate-pulse justify-center">
@@ -264,7 +290,6 @@ export default function FaturamentoPage() {
           ))}
           </>
         )}
-
         {/* Card Total */}
         <div className="flex justify-center">
           <div className="mt-6 bg-green-50 border border-green-200 rounded-2xl px-8 py-6 flex items-center gap-4 text-2xl font-bold shadow-sm">

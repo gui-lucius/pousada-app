@@ -7,13 +7,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // GET: Lista comandas (filtra por ID se passado na query)
     if (req.method === 'GET') {
-      const { id } = req.query
+      const { id, inicio, fim, pago, avulso } = req.query
+
+      // Busca por ID específico
       if (id) {
         const comanda = await prisma.consumo.findUnique({ where: { id: String(id) } })
         if (!comanda) return res.status(404).json({ error: 'Comanda não encontrada' })
         return res.status(200).json(comanda)
       }
-      // Lista todas abertas se não passar id
+
+      // Filtro customizado para faturamento
+      if (inicio && fim) {
+        let where: any = {
+          criadoEm: {
+            gte: new Date(inicio as string),
+            lte: new Date(fim as string),
+          }
+        }
+        // Só avulsas (sem checkinId)
+        if (avulso === 'true') {
+          where.checkinId = null
+        }
+        // Só comandas pagas
+        if (pago === 'true') {
+          where.status = 'pago'
+        }
+
+        const comandasFiltradas = await prisma.consumo.findMany({
+          where,
+          orderBy: { criadoEm: 'desc' }
+        })
+        return res.status(200).json(comandasFiltradas)
+      }
+
+      // Default: Lista todas abertas se não passar id nem período
       const comandas = await prisma.consumo.findMany({
         where: { status: 'aberta' },
         orderBy: { criadoEm: 'desc' }

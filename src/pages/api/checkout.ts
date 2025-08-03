@@ -1,7 +1,8 @@
-import type { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
+// pages/api/checkout.ts
 
-// Next.js pode criar várias instâncias em dev, evite múltiplas conexões:
+import type { NextApiRequest, NextApiResponse } from 'next'
+import { PrismaClient, Prisma } from '@prisma/client'
+
 const prisma = new PrismaClient()
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -18,9 +19,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
+      // Inclui checkin COMPLETO e consumos internos do hóspede!
       const checkouts = await prisma.checkOut.findMany({
         where,
         orderBy: { dataSaidaReal: 'desc' },
+        include: {
+          checkin: {
+            select: {
+              id: true,
+              chale: true,
+              valor: true, // <- esse é o valor da hospedagem!
+              entrada: true,
+              saida: true,
+              nome: true,
+              // Inclui os consumos internos do hóspede, se quiser detalhar no faturamento
+              consumos: {
+                select: {
+                  id: true,
+                  status: true,
+                  criadoEm: true,
+                  updatedAt: true,
+                  subcomandas: true, // geralmente json ou array
+                }
+              }
+            }
+          }
+        }
       })
 
       return res.status(200).json(checkouts)
@@ -39,6 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Campos obrigatórios faltando ou inválidos.' })
       }
 
+      // Cria o checkout
       const novoCheckout = await prisma.checkOut.create({
         data: {
           checkinId: Number(checkinId),
@@ -47,6 +72,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           total: Number(total),
         },
       })
+
+      // Busca todos os consumos desse checkin
+      const consumos = await prisma.consumo.findMany({
+        where: { checkinId: Number(checkinId) }
+      })
+
+      // Atualiza cada consumo, marcando todos os itens das subcomandas como pagos
+      for (const consumo of consumos) {
+        let subcomandas: any[] = []
+        try {
+          if (Array.isArray(consumo.subcomandas)) {
+            subcomandas = consumo.subcomandas
+          } else if (typeof consumo.subcomandas === "string") {
+            subcomandas = JSON.parse(consumo.subcomandas)
+            if (!Array.isArray(subcomandas)) subcomandas = []
+          } else if (consumo.subcomandas && typeof consumo.subcomandas === "object") {
+            subcomandas = []
+          } else {
+            subcomandas = []
+          }
+        } catch { subcomandas = [] }
+
+        subcomandas = subcomandas.map((sub: any) => ({
+          ...sub,
+          itens: (sub.itens || []).map((item: any) => ({
+            ...item,
+            pago: true
+          }))
+        }))
+
+        await prisma.consumo.update({
+          where: { id: consumo.id },
+          data: { subcomandas: subcomandas as Prisma.JsonArray, status: 'pago' }
+        })
+      }
 
       return res.status(201).json(novoCheckout)
     }
@@ -57,6 +117,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error(error)
     return res.status(500).json({ error: error.message || 'Erro interno do servidor' })
   } finally {
-    await prisma.$disconnect()
+    // Prisma só desconecta fora do ambiente serverless:
+    if (process.env.NODE_ENV !== 'development') {
+      await prisma.$disconnect()
+    }
   }
 }
