@@ -7,19 +7,23 @@ const prisma = new PrismaClient()
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    console.log(`[CHECKOUT API] Nova request: ${req.method}`);
+
     if (req.method === 'GET') {
-      // Filtro de período: ?inicio=2025-07-30T00:00:00.000Z&fim=2025-07-31T23:59:59.999Z
+      // Pega filtros de data no formato ISO vindo do frontend
       const { inicio, fim } = req.query
 
       let where: any = {}
       if (inicio && fim) {
         where.dataSaidaReal = {
-          gte: new Date(inicio as string),
-          lte: new Date(fim as string),
+          gte: new Date(inicio as string), // Exemplo: "2025-08-03T00:00:00.000Z"
+          lte: new Date(fim as string),    // Exemplo: "2025-08-04T23:59:59.999Z"
         }
       }
 
-      // Inclui checkin COMPLETO e consumos internos do hóspede!
+      // Debug para ver exatamente o filtro do banco
+      console.log('[CHECKOUT API][GET] Filtros:', where)
+
       const checkouts = await prisma.checkOut.findMany({
         where,
         orderBy: { dataSaidaReal: 'desc' },
@@ -28,18 +32,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             select: {
               id: true,
               chale: true,
-              valor: true, // <- esse é o valor da hospedagem!
+              valor: true,
               entrada: true,
               saida: true,
               nome: true,
-              // Inclui os consumos internos do hóspede, se quiser detalhar no faturamento
               consumos: {
                 select: {
                   id: true,
                   status: true,
                   criadoEm: true,
                   updatedAt: true,
-                  subcomandas: true, // geralmente json ou array
+                  subcomandas: true,
                 }
               }
             }
@@ -47,11 +50,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       })
 
+      console.log(`[CHECKOUT API][GET] Encontrou: ${checkouts.length} registros`)
       return res.status(200).json(checkouts)
     }
 
     if (req.method === 'POST') {
-      // Criação de novo checkout
+      console.log(`[CHECKOUT API][POST] Body recebido:`, req.body);
+
       const { checkinId, dataSaidaReal, formaPagamento, total } = req.body
 
       if (
@@ -60,7 +65,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         typeof formaPagamento !== 'string' ||
         typeof total !== 'number'
       ) {
-        return res.status(400).json({ error: 'Campos obrigatórios faltando ou inválidos.' })
+        console.error('[CHECKOUT API][POST] Campos obrigatórios faltando ou inválidos.', req.body)
+        res.status(400).json({ error: 'Campos obrigatórios faltando ou inválidos.' })
+        return
       }
 
       // Cria o checkout
@@ -72,13 +79,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           total: Number(total),
         },
       })
+      console.log(`[CHECKOUT API][POST] Novo checkout criado:`, novoCheckout);
 
-      // Busca todos os consumos desse checkin
+      // Busca e marca todos os consumos desse checkin como pagos
       const consumos = await prisma.consumo.findMany({
         where: { checkinId: Number(checkinId) }
       })
+      console.log(`[CHECKOUT API][POST] Achou ${consumos.length} consumos para checkin ${checkinId}`);
 
-      // Atualiza cada consumo, marcando todos os itens das subcomandas como pagos
       for (const consumo of consumos) {
         let subcomandas: any[] = []
         try {
@@ -92,7 +100,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           } else {
             subcomandas = []
           }
-        } catch { subcomandas = [] }
+        } catch (err) {
+          console.error(`[CHECKOUT API][POST] Erro ao parsear subcomandas do consumo ${consumo.id}:`, err)
+          subcomandas = []
+        }
 
         subcomandas = subcomandas.map((sub: any) => ({
           ...sub,
@@ -106,19 +117,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           where: { id: consumo.id },
           data: { subcomandas: subcomandas as Prisma.JsonArray, status: 'pago' }
         })
+        console.log(`[CHECKOUT API][POST] Consumo ${consumo.id} atualizado para "pago"`)
       }
 
-      return res.status(201).json(novoCheckout)
+      res.status(201).json(novoCheckout)
+      return
     }
 
     res.setHeader('Allow', ['GET', 'POST'])
-    return res.status(405).json({ error: `Método ${req.method} não suportado.` })
+    res.status(405).json({ error: `Método ${req.method} não suportado.` })
+    return
   } catch (error: any) {
-    console.error(error)
-    return res.status(500).json({ error: error.message || 'Erro interno do servidor' })
+    console.error(`[CHECKOUT API][ERRO]:`, error)
+    res.status(500).json({ error: error.message || 'Erro interno do servidor' })
+    return
   } finally {
-    // Prisma só desconecta fora do ambiente serverless:
-    if (process.env.NODE_ENV !== 'development') {
+    // Só desconecta em produção!
+    if (process.env.NODE_ENV === 'production') {
       await prisma.$disconnect()
     }
   }

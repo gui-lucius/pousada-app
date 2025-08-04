@@ -77,22 +77,12 @@ export default function CheckoutPage() {
     setErro(null)
     const comandasDoCheckin = consumos.filter(c => c.checkinId === checkin.id)
 
-    // 1. Marca todas como pagas e status "fechada"
+    // 1. Marca todas as comandas como pagas (opcional se backend já faz isso!)
     for (const comanda of comandasDoCheckin) {
       await atualizarComanda(comanda)
     }
 
-    // 2. REMOVE as comandas do hóspede
-    for (const comanda of comandasDoCheckin) {
-      await fetch('/api/consumo', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: comanda.id }),
-      })
-    }
-
-    // 3. Registra checkout no backend
-    await fetch('/api/checkout', {
+    const resp = await fetch('/api/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -102,6 +92,23 @@ export default function CheckoutPage() {
         total: Number(checkin.valor || 0),
       }),
     })
+
+    if (!resp.ok) {
+      const erro = await resp.json()
+      alert("Erro ao registrar checkout: " + (erro?.error || "Erro desconhecido"))
+      setCarregando(false)
+      return
+    }
+
+
+    // 3. Agora sim, remove as comandas do hóspede
+    for (const comanda of comandasDoCheckin) {
+      await fetch('/api/consumo', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: comanda.id }),
+      })
+    }
 
     // 4. Remove o checkin
     await fetch('/api/checkin', {
