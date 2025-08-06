@@ -1,6 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '@/utils/prisma'
 
+// Força data para meia-noite UTC. Nunca retorna undefined!
+function asMidnight(dateStr: string): Date {
+  if (!dateStr) throw new Error('Data obrigatória faltando')
+  // Garante 'YYYY-MM-DDT00:00:00.000Z'
+  return new Date(dateStr.slice(0, 10) + 'T00:00:00.000Z')
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     // GET: Lista todas as reservas
@@ -38,8 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           documento,
           telefone,
           email,
-          dataEntrada: new Date(dataEntrada),
-          dataSaida: new Date(dataSaida),
+          dataEntrada: asMidnight(dataEntrada), // nunca undefined
+          dataSaida: asMidnight(dataSaida),
           numeroPessoas: Number(numeroPessoas),
           chale,
           observacoes,
@@ -68,6 +75,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (!id) return res.status(400).json({ error: 'ID obrigatório.' })
 
+      // Mesmo check obrigatório das datas, para nunca dar undefined!
+      if (!dataEntrada || !dataSaida) {
+        return res.status(400).json({ error: 'Datas obrigatórias faltando.' })
+      }
+
       const atualizada = await prisma.reserva.update({
         where: { id },
         data: {
@@ -75,8 +87,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           documento,
           telefone,
           email,
-          dataEntrada: new Date(dataEntrada),
-          dataSaida: new Date(dataSaida),
+          dataEntrada: asMidnight(dataEntrada),
+          dataSaida: asMidnight(dataSaida),
           numeroPessoas: Number(numeroPessoas),
           chale,
           observacoes,
@@ -96,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { id } = req.body
       if (!id) return res.status(400).json({ error: 'ID obrigatório.' })
       await prisma.reserva.delete({ where: { id } })
-      // Status 204 = No Content (padrão para delete bem sucedido, sem retorno)
+      // Status 204 = No Content
       return res.status(204).end()
     }
 
@@ -104,6 +116,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Método não suportado' })
   } catch (error: any) {
     console.error(error)
+    // Retorna mensagem clara se erro vier de campo obrigatório faltando
+    if (error.message && error.message.includes('Data obrigatória faltando')) {
+      return res.status(400).json({ error: error.message })
+    }
     return res.status(500).json({ error: error.message || 'Erro interno do servidor' })
   }
 }

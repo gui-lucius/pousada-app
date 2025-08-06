@@ -3,6 +3,13 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+// Helper para garantir "YYYY-MM-DD" => sempre meia-noite UTC no banco
+function asMidnight(dateStr: string) {
+  if (!dateStr) return undefined
+  // Garante 'YYYY-MM-DDT00:00:00.000Z'
+  return new Date(dateStr.slice(0, 10) + 'T00:00:00.000Z')
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method === 'GET') {
@@ -13,22 +20,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'POST') {
-      // Agora pega TODOS os campos enviados
       const data = req.body
 
-      // Ajusta os campos de data e valor
-      if (data.entrada) data.entrada = new Date(data.entrada)
-      if (data.saida) data.saida = new Date(data.saida)
+      // Sempre forçar só a data, nunca hora!
+      if (data.entrada) data.entrada = asMidnight(data.entrada)
+      if (data.saida) data.saida = asMidnight(data.saida)
       if (data.valor) data.valor = Number(data.valor)
-      
-      // Cria o check-in com todos os dados recebidos
-      const novo = await prisma.checkIn.create({ data })
 
+      const novo = await prisma.checkIn.create({ data })
       return res.status(201).json(novo)
     }
 
     if (req.method === 'PUT') {
       const { id, ...data } = req.body
+      if (data.entrada) data.entrada = asMidnight(data.entrada)
+      if (data.saida) data.saida = asMidnight(data.saida)
+      if (data.valor) data.valor = Number(data.valor)
+
       const atualizado = await prisma.checkIn.update({
         where: { id: Number(id) },
         data,

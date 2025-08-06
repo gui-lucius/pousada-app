@@ -46,6 +46,7 @@ model Despesa {
 model CheckIn {
   id                    Int       @id @default(autoincrement())
   nome                  String
+  status                String    @default("aberto")
   dataNascimento        String?
   sexo                  String?
   telefone              String?
@@ -73,6 +74,7 @@ model CheckIn {
 
   consumos   Consumo[]   @relation("CheckInToConsumo")
   checkOut   CheckOut?   @relation("CheckInCheckOut")
+  faturamentos Faturamento[] @relation("CheckInFaturamento")
 }
 
 model Consumo {
@@ -86,6 +88,8 @@ model Consumo {
   subcomandas  Json
 
   checkin      CheckIn?  @relation("CheckInToConsumo", fields: [checkinId], references: [id], onDelete: Cascade)
+  faturamento  Faturamento? @relation(fields: [faturamentoId], references: [id])
+  faturamentoId String?
 }
 
 model CheckOut {
@@ -96,10 +100,34 @@ model CheckOut {
   total         Float
 
   checkin       CheckIn  @relation("CheckInCheckOut", fields: [checkinId], references: [id], onDelete: Cascade)
+  faturamento   Faturamento? @relation(fields: [faturamentoId], references: [id])
+  faturamentoId String?
 }
 
 model PrecosConfig {
   id              Int     @id @default(1)
   hospedagem      Json
   categoriasExtras Json
+}
+
+model Faturamento {
+  id               String    @id @default(uuid())
+  tipo             String    // "hospedagem" | "comanda_hospede" | "comanda_avulsa"
+  referenciaId     String?   // checkOutId ou consumoId (para rastreabilidade)
+  checkinId        Int?      // se for hospedagem/comanda hóspede
+  nomeHospede      String?
+  chale            String?
+  dataEntrada      DateTime?
+  dataSaida        DateTime?
+  dataSaidaReal    DateTime?
+  valorHospedagem  Float?    // hospedagem
+  valorComanda     Float?    // comanda total
+  total            Float?    // <<--- campo opcional (hospedagem+comanda)
+  formaPagamento   String
+  itensComanda     Json?     // [{produto, quantidade, valorUnit, valorTotal}, ...]
+  criadoEm         DateTime  @default(now())
+  
+  checkin          CheckIn?   @relation("CheckInFaturamento", fields: [checkinId], references: [id])
+  checkOut         CheckOut[] // Relacionar se quiser
+  consumo          Consumo[]  // Relacionar se quiser
 }
