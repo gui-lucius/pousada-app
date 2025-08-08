@@ -292,7 +292,7 @@ export default function ComandaDetalhes() {
                         className={item.pago ? "bg-gray-100 text-gray-400 line-through" : "bg-white"}>
                         <td>
                           <input
-                            value={item.nome}
+                            value={item.nome || item.produto}
                             disabled={item.pago}
                             onChange={(e) =>
                               atualizarItem(subIndex, itemIndex, 'nome', e.target.value)
