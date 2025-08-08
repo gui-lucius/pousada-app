@@ -8,13 +8,18 @@ type Faturamento = {
   id: string
   tipo: string
   nomeHospede?: string
-  chale?: string
+  chale?: string | string[]
   valorHospedagem?: number
   valorComanda?: number
   total?: number
   criadoEm: string
   formaPagamento: string
   itensComanda?: any
+}
+
+type Categoria = {
+  nome: string
+  itens: string[]
 }
 
 function real(n: number) {
@@ -36,48 +41,83 @@ function formatPeriodo(inicio: string, fim: string) {
 }
 
 export default function FaturamentoPage() {
-  // Estados de input
+  // Filtros
   const [inicioInput, setInicioInput] = useState('')
   const [fimInput, setFimInput] = useState('')
-  // Estado que vai pra query
   const [inicio, setInicio] = useState('')
   const [fim, setFim] = useState('')
-
   const [selectedTab, setSelectedTab] = useState<'hoje'|'ultimos7'|'mes'|'ano'|'personalizado'>('hoje')
+
+  // Dados faturamento
   const [faturamentos, setFaturamentos] = useState<Faturamento[]>([])
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string|null>(null)
 
-  // Função unificada de fetch
+  // Categorias e itens
+  const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState('')
+  const [itemSelecionado, setItemSelecionado] = useState('')
+
+  // Resultado agregado
+  const [totalQuantidade, setTotalQuantidade] = useState<number|null>(null)
+  const [totalValor, setTotalValor] = useState<number|null>(null)
+
+  // Busca categorias no load
+  useEffect(() => {
+    fetch('/api/faturamento?action=categorias')
+      .then(r => r.json())
+      .then((data: Categoria[]) => setCategorias(data))
+      .catch(err => console.error('Erro ao buscar categorias', err))
+  }, [])
+
+  // Função para buscar faturamento
   const buscar = useCallback(async () => {
     if (!inicio || !fim) return
     setErro(null)
     setCarregando(true)
+
     try {
-      const params = new URLSearchParams({ inicio, fim })
+      const params = new URLSearchParams({
+        inicio,
+        fim,
+        ...(categoriaSelecionada ? { categoria: categoriaSelecionada } : {}),
+        ...(itemSelecionado ? { item: itemSelecionado } : {})
+      })
+
       const res = await fetch(`/api/faturamento?${params.toString()}`)
       if (!res.ok) throw new Error(`Status ${res.status}`)
+
       const data = await res.json()
-      setFaturamentos(data)
+
+      if (data.totalQuantidade !== undefined && data.totalValor !== undefined) {
+        // Quando é filtrado por categoria/item
+        setTotalQuantidade(data.totalQuantidade)
+        setTotalValor(data.totalValor)
+        setFaturamentos([])
+      } else {
+        // Quando é geral
+        setFaturamentos(data)
+        setTotalQuantidade(null)
+        setTotalValor(null)
+      }
     } catch (e: any) {
       console.error('Erro ao buscar faturamentos:', e)
       setErro('Não foi possível carregar os dados. Tente novamente.')
     } finally {
       setCarregando(false)
     }
-  }, [inicio, fim])
+  }, [inicio, fim, categoriaSelecionada, itemSelecionado])
 
-  // Inicializa com “Hoje”
+  // Inicializa com hoje
   useEffect(() => {
     filtrosRapidos.hoje()
   }, [])
 
-  // Chama buscar quando a dupla (inicio, fim) oficial mudar
   useEffect(() => {
     buscar()
   }, [buscar])
 
-  // Presets de filtro
+  // Presets
   const filtrosRapidos = {
     hoje: () => {
       const d1 = new Date(); d1.setHours(0,0,0,0)
@@ -117,7 +157,7 @@ export default function FaturamentoPage() {
 
   return (
     <Layout title="📊 Faturamento">
-      <div className="max-w-4xl mx-auto px-2 py-8 text-black">
+      <div className="max-w-5xl mx-auto px-2 py-8 text-black">
         {/* Tabs */}
         <div className="flex flex-wrap gap-2 mb-4 justify-center">
           <TabBtn text="Hoje" active={selectedTab==='hoje'} onClick={filtrosRapidos.hoje} icon="📅" />
@@ -129,30 +169,20 @@ export default function FaturamentoPage() {
 
         {/* Filtro personalizado */}
         {selectedTab === 'personalizado' && (
-          <div className="flex gap-4 mb-4 items-end flex-col sm:flex-row">
+          <div className="flex gap-4 mb-4 flex-col sm:flex-row">
             <div className="flex-1">
               <label className="block text-sm font-medium mb-1">Início</label>
-              <input
-                type="date"
-                value={inicioInput}
-                onChange={e=> setInicioInput(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2"
-              />
+              <input type="date" value={inicioInput} onChange={e=> setInicioInput(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2" />
             </div>
             <div className="flex-1">
               <label className="block text-sm font-medium mb-1">Fim</label>
-              <input
-                type="date"
-                value={fimInput}
-                onChange={e=> setFimInput(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2"
-              />
+              <input type="date" value={fimInput} onChange={e=> setFimInput(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2" />
             </div>
-            <button
-              type="button"
+            <button type="button"
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold"
               onClick={() => {
-                // Só atualiza o fetch quando clicar aqui
                 const d1 = new Date(inicioInput)
                 d1.setHours(0,0,0,0)
                 const d2 = new Date(fimInput)
@@ -160,78 +190,113 @@ export default function FaturamentoPage() {
                 setInicio(d1.toISOString())
                 setFim(d2.toISOString())
               }}
-            >
-              Filtrar
-            </button>
+            >Filtrar</button>
           </div>
         )}
 
-        {/* Período e Resumo */}
+        {/* Filtros Categoria/Item */}
+        <div className="flex gap-4 mb-6 flex-col sm:flex-row">
+          <div className="flex-1">
+            <label className="block text-sm font-medium mb-1">Categoria</label>
+            <select className="w-full border rounded-lg px-3 py-2"
+              value={categoriaSelecionada}
+              onChange={(e) => {
+                setCategoriaSelecionada(e.target.value)
+                setItemSelecionado('')
+              }}
+            >
+              <option value="">Todas</option>
+              {categorias.map(cat => (
+                <option key={cat.nome} value={cat.nome}>{cat.nome}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium mb-1">Item</label>
+            <select className="w-full border rounded-lg px-3 py-2"
+              value={itemSelecionado}
+              onChange={(e) => setItemSelecionado(e.target.value)}
+              disabled={!categoriaSelecionada}
+            >
+              <option value="">Todos</option>
+              {categorias.find(c => c.nome === categoriaSelecionada)?.itens.map(item => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Período */}
         <div className="mb-6 text-center text-lg font-medium text-blue-900">
           <span className="bg-blue-50 px-4 py-1 rounded-full">
             Período: {formatPeriodo(inicio, fim)}
           </span>
         </div>
 
-        {/* Indicadores */}
-        <div className="flex flex-wrap gap-6 justify-center mb-8">
-          <ResumoCard label="Hospedagem" value={real(
-            faturamentos
-              .filter(f=>f.tipo==='hospedagem')
-              .reduce((s,f)=> s + (f.valorHospedagem||0),0)
-          )} icon="🏨" color="text-blue-700" bg="bg-blue-100"/>
-
-          <ResumoCard label="Comandas" value={real(
-            faturamentos
-              .filter(f=>f.tipo!=='hospedagem')
-              .reduce((s,f)=> s + (f.valorComanda||0),0)
-          )} icon="🧾" color="text-green-700" bg="bg-green-100"/>
-
-          <ResumoCard label="Total Geral" value={real(
-            faturamentos
-              .reduce((s,f)=> s + (f.total||f.valorHospedagem||f.valorComanda||0),0)
-          )} icon="💰" color="text-purple-700" bg="bg-purple-100" valueClass="text-xl"/>
-        </div>
+        {/* Resumo */}
+        {totalQuantidade !== null && totalValor !== null ? (
+          <div className="flex flex-wrap gap-6 justify-center mb-8">
+            <ResumoCard label="Quantidade" value={String(totalQuantidade)} icon="📦" color="text-blue-700" bg="bg-blue-100"/>
+            <ResumoCard label="Total" value={real(totalValor)} icon="💰" color="text-green-700" bg="bg-green-100"/>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-6 justify-center mb-8">
+            <ResumoCard label="Hospedagem" value={real(
+              faturamentos.filter(f=>f.tipo==='hospedagem').reduce((s,f)=> s + (f.valorHospedagem||0),0)
+            )} icon="🏨" color="text-blue-700" bg="bg-blue-100"/>
+            <ResumoCard label="Comandas" value={real(
+              faturamentos.filter(f=>f.tipo!=='hospedagem').reduce((s,f)=> s + (f.valorComanda||0),0)
+            )} icon="🧾" color="text-green-700" bg="bg-green-100"/>
+            <ResumoCard label="Total Geral" value={real(
+              faturamentos.reduce((s,f)=> s + (f.total||f.valorHospedagem||f.valorComanda||0),0)
+            )} icon="💰" color="text-purple-700" bg="bg-purple-100" valueClass="text-xl"/>
+          </div>
+        )}
 
         {/* Tabela */}
-        <div className="bg-white border shadow rounded-xl p-4">
-          <div className="font-bold text-lg mb-3 text-blue-900">Lançamentos</div>
-          {erro && <div className="p-4 bg-red-100 text-red-800 mb-4">{erro}</div>}
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="bg-blue-50">
-                  <th className="p-2 text-left">Data</th>
-                  <th className="p-2 text-left">Tipo</th>
-                  <th className="p-2 text-left">Hospede/Chalé</th>
-                  <th className="p-2 text-left">Valor</th>
-                  <th className="p-2 text-left">Pagamento</th>
-                </tr>
-              </thead>
-              <tbody>
-                {carregando && (
-                  <tr><td colSpan={5} className="py-8 text-center text-blue-600 animate-pulse">Carregando...</td></tr>
-                )}
-                {!carregando && faturamentos.length === 0 && (
-                  <tr><td colSpan={5} className="py-8 text-center text-gray-400">Nenhum lançamento.</td></tr>
-                )}
-                {!carregando && faturamentos.map(f => (
-                  <tr key={f.id} className="border-b">
-                    <td className="p-2">{format(parseISO(f.criadoEm), 'dd/MM/yyyy')}</td>
-                    <td className="p-2 font-bold">{f.tipo}</td>
-                    <td className="p-2">
-                      {f.nomeHospede || '-'} <span className="text-xs bg-gray-100 text-gray-600 rounded px-1">{f.chale}</span>
-                    </td>
-                    <td className="p-2 font-medium text-blue-800">
-                      {real(f.total||f.valorHospedagem||f.valorComanda||0)}
-                    </td>
-                    <td className="p-2">{f.formaPagamento}</td>
+        {totalQuantidade === null && (
+          <div className="bg-white border shadow rounded-xl p-4">
+            <div className="font-bold text-lg mb-3 text-blue-900">Lançamentos</div>
+            {erro && <div className="p-4 bg-red-100 text-red-800 mb-4">{erro}</div>}
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-blue-50">
+                    <th className="p-2 text-left">Data</th>
+                    <th className="p-2 text-left">Tipo</th>
+                    <th className="p-2 text-left">Hospede/Chalé</th>
+                    <th className="p-2 text-left">Valor</th>
+                    <th className="p-2 text-left">Pagamento</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {carregando && (
+                    <tr><td colSpan={5} className="py-8 text-center text-blue-600 animate-pulse">Carregando...</td></tr>
+                  )}
+                  {!carregando && faturamentos.length === 0 && (
+                    <tr><td colSpan={5} className="py-8 text-center text-gray-400">Nenhum lançamento.</td></tr>
+                  )}
+                  {!carregando && faturamentos.map(f => (
+                    <tr key={f.id} className="border-b">
+                      <td className="p-2">{format(parseISO(f.criadoEm), 'dd/MM/yyyy')}</td>
+                      <td className="p-2 font-bold">{f.tipo}</td>
+                      <td className="p-2">
+                        {f.nomeHospede || '-'}{' '}
+                        <span className="text-xs bg-gray-100 text-gray-600 rounded px-1">
+                          {Array.isArray(f.chale) ? f.chale.join(', ') : f.chale}
+                        </span>
+                      </td>
+                      <td className="p-2 font-medium text-blue-800">
+                        {real(f.total||f.valorHospedagem||f.valorComanda||0)}
+                      </td>
+                      <td className="p-2">{f.formaPagamento}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </Layout>
   )
@@ -241,8 +306,7 @@ function TabBtn({ text, active, onClick, icon }: { text:string, active:boolean, 
   return (
     <button
       className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold border transition 
-        ${active ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 hover:bg-blue-50'}
-      `}
+        ${active ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 hover:bg-blue-50'}`}
       onClick={onClick}
       type="button"
     >

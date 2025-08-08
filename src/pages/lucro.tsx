@@ -4,20 +4,15 @@ import Layout from '@/components/layout/Layout'
 import { useApenasAdmin } from '@/utils/proteger'
 import { useEffect, useState } from 'react'
 
-type Checkout = {
+type Faturamento = {
   id: string
-  total: number   // <-- Use sempre o "total" do checkout
-  dataSaidaReal: string
-}
-type ConsumoAvulso = {
-  id: string
-  valor: number
-  criadoEm: string
+  valorHospedagem?: number
+  valorComanda?: number
+  total?: number
 }
 type Despesa = {
   id: string
   valor: number
-  data: string
 }
 
 export default function LucroPage() {
@@ -35,7 +30,7 @@ export default function LucroPage() {
     return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, style: 'currency', currency: 'BRL' })
   }
 
-  // Filtros rápidos (hoje, últimos 7, mês, ano)
+  // Filtros rápidos
   const aplicarFiltro = (inicioStr: string, fimStr: string) => {
     setInicio(inicioStr)
     setFim(fimStr)
@@ -46,7 +41,7 @@ export default function LucroPage() {
       hoje.setHours(0, 0, 0, 0)
       const fim = new Date()
       fim.setHours(23, 59, 59, 999)
-      aplicarFiltro(hoje.toISOString().slice(0,10), fim.toISOString().slice(0,10))
+      aplicarFiltro(hoje.toISOString(), fim.toISOString())
       setSelectedTab('hoje')
     },
     ultimos7: () => {
@@ -55,7 +50,7 @@ export default function LucroPage() {
       const inicio = new Date()
       inicio.setDate(fim.getDate() - 6)
       inicio.setHours(0, 0, 0, 0)
-      aplicarFiltro(inicio.toISOString().slice(0,10), fim.toISOString().slice(0,10))
+      aplicarFiltro(inicio.toISOString(), fim.toISOString())
       setSelectedTab('ultimos7')
     },
     mes: () => {
@@ -66,12 +61,12 @@ export default function LucroPage() {
       const fim = new Date(ano, mes + 1, 0)
       inicio.setHours(0, 0, 0, 0)
       fim.setHours(23, 59, 59, 999)
-      aplicarFiltro(inicio.toISOString().slice(0,10), fim.toISOString().slice(0,10))
+      aplicarFiltro(inicio.toISOString(), fim.toISOString())
       setSelectedTab('mes')
     },
     ano: () => {
       const ano = new Date().getFullYear()
-      aplicarFiltro(`${ano}-01-01`, `${ano}-12-31`)
+      aplicarFiltro(`${ano}-01-01T00:00:00.000Z`, `${ano}-12-31T23:59:59.999Z`)
       setSelectedTab('ano')
     }
   }
@@ -83,17 +78,12 @@ export default function LucroPage() {
     const fetchDados = async () => {
       setLoading(true)
       try {
-        // 1. Faturamento: checkouts (total) + consumos avulsos pagos
-        const checkoutsRes = await fetch(`/api/checkout?inicio=${inicio}&fim=${fim}`)
-        const checkouts: Checkout[] = await checkoutsRes.json()
-
-        const avulsosRes = await fetch(`/api/consumo?inicio=${inicio}&fim=${fim}&pago=true&avulso=true`)
-        const consumosAvulsos: ConsumoAvulso[] = await avulsosRes.json()
-
-        // Use sempre .total de checkout (para evitar somar consumos já inclusos)
-        const totalCheckouts = checkouts.reduce((sum, c) => sum + (c.total || 0), 0)
-        const totalAvulsos = consumosAvulsos.reduce((sum, a) => sum + (a.valor || 0), 0)
-        const totalFaturamento = totalCheckouts + totalAvulsos
+        // 1. Faturamento: usa mesma lógica do faturamento.tsx
+        const fatRes = await fetch(`/api/faturamento?inicio=${inicio}&fim=${fim}`)
+        const faturamentos: Faturamento[] = await fatRes.json()
+        const totalFaturamento = faturamentos.reduce((sum, f) =>
+          sum + (f.total || f.valorHospedagem || f.valorComanda || 0), 0
+        )
 
         // 2. Despesas
         const despesasRes = await fetch(`/api/despesas?inicio=${inicio}&fim=${fim}`)
@@ -113,7 +103,6 @@ export default function LucroPage() {
 
   const lucro = faturamento - despesas
 
-  // UI
   return (
     <Layout title="📈 Lucro">
       <div className="max-w-2xl mx-auto px-2 py-8 text-black">
@@ -133,8 +122,8 @@ export default function LucroPage() {
               <label className="block text-sm font-medium mb-1">Data de Início</label>
               <input
                 type="date"
-                value={inicio}
-                onChange={e => setInicio(e.target.value)}
+                value={inicio.slice(0,10)}
+                onChange={e => setInicio(new Date(e.target.value).toISOString())}
                 className="w-full border rounded-lg px-3 py-2 text-black"
               />
             </div>
@@ -142,8 +131,8 @@ export default function LucroPage() {
               <label className="block text-sm font-medium mb-1">Data de Fim</label>
               <input
                 type="date"
-                value={fim}
-                onChange={e => setFim(e.target.value)}
+                value={fim.slice(0,10)}
+                onChange={e => setFim(new Date(e.target.value).toISOString())}
                 className="w-full border rounded-lg px-3 py-2 text-black"
               />
             </div>
@@ -197,15 +186,13 @@ export default function LucroPage() {
   )
 }
 
-// Botão Tab UX/UI
 function TabBtn({ text, active, onClick, icon }: { text: string, active: boolean, onClick: () => void, icon?: string }) {
   return (
     <button
       className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold border transition 
         ${active
           ? 'bg-blue-600 text-white border-blue-700 shadow'
-          : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'}
-      `}
+          : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'}`}
       onClick={onClick}
       type="button"
     >
@@ -215,7 +202,6 @@ function TabBtn({ text, active, onClick, icon }: { text: string, active: boolean
   )
 }
 
-// Linha resumo (componentizado pra manter padrão)
 function ResumoRow({
   label,
   icon,
@@ -233,7 +219,7 @@ function ResumoRow({
 }) {
   return (
     <div className="flex items-center gap-3 w-full justify-between">
-      <span className={`flex items-center gap-2 font-medium`}>
+      <span className="flex items-center gap-2 font-medium">
         <span className={`rounded-full p-2 text-xl ${bg}`}>{icon}</span>
         {label}
       </span>

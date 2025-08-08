@@ -1,9 +1,8 @@
-// pages/api/faturamento.tsx
+// pages/api/faturamento.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { PrismaClient } from '@prisma/client'
 
-// Instancia o Prisma com logging de queries e erros
 const prisma = new PrismaClient({
   log: ['query', 'error'],
 })
@@ -13,11 +12,47 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
-    // ============================= GET ===================================
-    if (req.method === 'GET') {
-      const { inicio, fim, tipo, search } = req.query
+    // ============================= GET LISTA CATEGORIAS ===================
+    if (req.method === 'GET' && req.query.action === 'categorias') {
+      const faturamentos = await prisma.faturamento.findMany()
 
-      console.log('[FATURAMENTO][GET] filtros:', { inicio, fim, tipo, search })
+      const categoriasMap: Record<string, Set<string>> = {}
+
+      faturamentos.forEach((f) => {
+        if (f.tipo === 'hospedagem') {
+          if (!categoriasMap['Hospedagem']) categoriasMap['Hospedagem'] = new Set()
+          if (f.chale) categoriasMap['Hospedagem'].add(f.chale)
+        }
+
+        if (Array.isArray(f.itensComanda)) {
+          f.itensComanda.forEach((item: any) => {
+            const cat = item.categoria || 'Sem categoria'
+            if (!categoriasMap[cat]) categoriasMap[cat] = new Set()
+            if (item.produto) categoriasMap[cat].add(item.produto)
+          })
+        }
+      })
+
+      const categorias = Object.entries(categoriasMap).map(([nome, itens]) => ({
+        nome,
+        itens: Array.from(itens),
+      }))
+
+      return res.status(200).json(categorias)
+    }
+
+    // ============================= GET FATURAMENTO ========================
+    if (req.method === 'GET') {
+      const { inicio, fim, tipo, search, categoria, item } = req.query
+
+      console.log('[FATURAMENTO][GET] filtros:', {
+        inicio,
+        fim,
+        tipo,
+        search,
+        categoria,
+        item,
+      })
 
       const where: any = {}
       if (inicio && fim) {
@@ -39,17 +74,53 @@ export default async function handler(
       const faturamentos = await prisma.faturamento.findMany({
         where,
         orderBy: { criadoEm: 'desc' },
-        include: {
-          checkin: true,
-          checkOut: true,
-          consumo: true,
-        },
       })
 
-      console.log(
-        `[FATURAMENTO][GET] retornou ${faturamentos.length} registros`
-      )
-      return res.status(200).json(faturamentos)
+      // Se não tiver categoria ou item, retorna os registros normais
+      if (!categoria && !item) {
+        return res.status(200).json(faturamentos)
+      }
+
+      // Se tiver categoria/item, agrega valores
+      let totalQuantidade = 0
+      let totalValor = 0
+
+      faturamentos.forEach((f) => {
+        if (String(categoria).toLowerCase() === 'hospedagem') {
+          const chaleStr = Array.isArray(f.chale)
+            ? f.chale.join(', ')
+            : (f.chale ?? '');
+
+          if (
+            f.tipo === 'hospedagem' &&
+            (!item || chaleStr.toLowerCase() === String(item).toLowerCase())
+          ) {
+            totalQuantidade += 1;
+            totalValor += f.valorHospedagem || 0;
+          }
+        } else if (Array.isArray(f.itensComanda)) {
+          f.itensComanda.forEach((i: any) => {
+            const matchesCategoria = categoria
+              ? String(i.categoria).toLowerCase() === String(categoria).toLowerCase()
+              : true;
+            const matchesItem = item
+              ? String(i.produto).toLowerCase() === String(item).toLowerCase()
+              : true;
+
+            if (matchesCategoria && matchesItem) {
+              totalQuantidade += Number(i.quantidade) || 0;
+              totalValor += Number(i.valorTotal) || 0;
+            }
+          });
+        }
+      });
+
+      return res.status(200).json({
+        categoria: categoria || null,
+        item: item || null,
+        totalQuantidade,
+        totalValor,
+      })
     }
 
     // ============================= POST ===================================
@@ -57,67 +128,44 @@ export default async function handler(
       console.log('[FATURAMENTO][POST] payload recebido:', req.body)
       const data = req.body
 
-      // Validação simples
       if (!data.tipo || !data.formaPagamento) {
-        console.warn(
-          '[FATURAMENTO][POST] campos obrigatórios ausentes:',
-          data
-        )
-        return res
-          .status(400)
-          .json({ error: 'Campos obrigatórios ausentes (tipo, formaPagamento)' })
+        return res.status(400).json({
+          error: 'Campos obrigatórios ausentes (tipo, formaPagamento)',
+        })
       }
 
-      // Prepara payload para o Prisma
       const payload: any = {
         ...data,
         criadoEm: data.criadoEm ? new Date(data.criadoEm) : undefined,
         dataEntrada: data.dataEntrada ? new Date(data.dataEntrada) : undefined,
         dataSaida: data.dataSaida ? new Date(data.dataSaida) : undefined,
-        dataSaidaReal: data.dataSaidaReal
-          ? new Date(data.dataSaidaReal)
-          : undefined,
+        dataSaidaReal: data.dataSaidaReal ? new Date(data.dataSaidaReal) : undefined,
       }
 
-      console.log('[FATURAMENTO][POST] vai criar com payload:', payload)
       const novoFaturamento = await prisma.faturamento.create({
         data: payload,
       })
-      console.log(
-        '[FATURAMENTO][POST] create retornou:',
-        novoFaturamento
-      )
 
       return res.status(201).json(novoFaturamento)
     }
 
-    // ============================= DELETE ===================================
+    // ============================= DELETE =================================
     if (req.method === 'DELETE') {
       const { id } = req.query
-      console.log('[FATURAMENTO][DELETE] id recebido:', id)
       if (!id) {
-        return res
-          .status(400)
-          .json({ error: 'Id obrigatório para deletar.' })
+        return res.status(400).json({ error: 'Id obrigatório para deletar.' })
       }
 
       await prisma.faturamento.delete({ where: { id: id as string } })
-      console.log('[FATURAMENTO][DELETE] registro deletado:', id)
       return res.status(204).end()
     }
 
-    // ============================= MÉTODO NÃO SUPORTADO ====================
     res.setHeader('Allow', ['GET', 'POST', 'DELETE'])
-    return res
-      .status(405)
-      .json({ error: `Método ${req.method} não suportado.` })
+    return res.status(405).json({ error: `Método ${req.method} não suportado.` })
   } catch (error: any) {
     console.error('[FATURAMENTO API][ERRO]:', error)
-    return res
-      .status(500)
-      .json({ error: error.message || 'Erro interno do servidor' })
+    return res.status(500).json({ error: error.message || 'Erro interno do servidor' })
   } finally {
-    // Desconecta o Prisma em produção para evitar conexões ociosas
     if (process.env.NODE_ENV === 'production') {
       await prisma.$disconnect()
     }

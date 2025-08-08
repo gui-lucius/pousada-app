@@ -233,9 +233,10 @@ export default function ComandaDetalhes() {
                       const novosItens = categoria.itens
                         .filter((item: any) => quantidades[item.nome] && quantidades[item.nome] > 0)
                         .map((item: any) => ({
-                          nome: item.nome,
+                          produto: item.nome, // <-- mudar de nome para produto
                           preco: item.preco,
                           quantidade: quantidades[item.nome],
+                          valorTotal: item.preco * quantidades[item.nome],
                           categoria: categoriaSelecionada,
                           pago: false,
                         }));
@@ -372,12 +373,39 @@ export default function ComandaDetalhes() {
                     ...sub,
                     itens: sub.itens.map((item: any) => ({ ...item, pago: true })),
                   })),
-                  status: 'paga', 
+                  status: 'paga',
                 };
+
+                const itensParaFaturamento: any[] = [];
+                (comanda.subcomandas || []).forEach((sub: any) => {
+                  sub.itens.forEach((item: any) => {
+                    itensParaFaturamento.push({
+                      categoria: item.categoria || 'Sem categoria',
+                      produto: item.produto || item.nome,
+                      quantidade: item.quantidade,
+                      valorTotal: item.preco * item.quantidade,
+                    });
+                  });
+                });
+
+                await fetch('/api/faturamento', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    tipo: 'comanda_avulsa', // ou comanda_hospede se for o caso
+                    formaPagamento: 'Dinheiro', // ajustar conforme seleção real
+                    itensComanda: itensParaFaturamento,
+                    nomeHospede: comanda.cliente, // se houver
+                    criadoEm: new Date(),
+                  }),
+                });
+
                 await atualizarComanda(comTodosPagos);
-                alert('Comanda finalizada! Todos os itens foram marcados como pagos.');
-                router.push('/consumo'); 
+
+                alert('Comanda finalizada e lançada no faturamento!');
+                router.push('/consumo');
               }}
+
             />
           </div>
         )}
