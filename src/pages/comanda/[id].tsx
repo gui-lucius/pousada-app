@@ -25,9 +25,16 @@ export default function ComandaDetalhes() {
       const resPrecos = await fetch('/api/precos');
       const precosDb = await resPrecos.json();
 
+      // Garante que toda subcomanda tenha um id
+      const subcomandasComId = (Array.isArray(comandaDb.subcomandas) ? comandaDb.subcomandas : [])
+        .map((sub: any) => ({
+          ...sub,
+          id: sub.id || crypto.randomUUID(),
+        }));
+
       setComanda({
         ...comandaDb,
-        subcomandas: Array.isArray(comandaDb.subcomandas) ? comandaDb.subcomandas : [],
+        subcomandas: subcomandasComId,
       });
       setPrecos(precosDb);
     };
@@ -76,7 +83,7 @@ export default function ComandaDetalhes() {
           </div>
           <div className="mt-4 sm:mt-0">
             <span className="bg-blue-600 text-white rounded-lg px-4 py-2 text-lg font-bold shadow-sm">
-              Total: R$ {(comanda.subcomandas || []).reduce((t: number, s: any) => t + s.total, 0).toFixed(2)}
+              Total: R$ {(comanda.subcomandas || []).reduce((t: number, s: any) => t + Number(s.total || 0), 0).toFixed(2)}
             </span>
           </div>
         </div>
@@ -85,16 +92,16 @@ export default function ComandaDetalhes() {
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">👥 Pessoas na Comanda</h2>
           <div className="flex flex-wrap gap-4 mb-3">
-            {(comanda.subcomandas || []).map((sub: any) => (
+            {(comanda.subcomandas || []).map((sub: any, index: number) => (
               <div
-                key={sub.id}
+                key={sub.id || `${sub.nome}-${index}`}
                 className={`flex items-center px-3 py-2 rounded-lg shadow border gap-2 cursor-pointer transition
                   ${subcomandaSelecionadaId === sub.id
                     ? 'bg-blue-100 border-blue-400'
                     : 'bg-gray-50 hover:bg-blue-50 border-gray-200'
                   }`
                 }
-                onClick={() => setSubcomandaSelecionadaId(sub.id)}
+                onClick={() => setSubcomandaSelecionadaId(sub.id || `${sub.nome}-${index}`)}
               >
                 <span className="w-8 h-8 rounded-full bg-blue-200 text-blue-800 flex items-center justify-center font-bold">
                   {sub.nome.charAt(0).toUpperCase()}
@@ -120,47 +127,24 @@ export default function ComandaDetalhes() {
             {/* Adicionar pessoa */}
             <button
               onClick={async () => {
-                const comTodosPagos = {
-                  ...comanda,
-                  subcomandas: (comanda.subcomandas || []).map((sub: any) => ({
-                    ...sub,
-                    itens: sub.itens.map((item: any) => ({ ...item, pago: true })),
-                  })),
-                  status: 'paga',
+                const nomePessoa = prompt("Nome da pessoa:")?.trim();
+                if (!nomePessoa) return;
+
+                const novaPessoa = {
+                  id: crypto.randomUUID(), // gera um ID único
+                  nome: nomePessoa,
+                  itens: [],
+                  total: 0
                 };
 
-                if (comanda.tipo === 'comanda_avulsa') {
-                  const itensParaFaturamento: any[] = [];
-                  (comanda.subcomandas || []).forEach((sub: any) => {
-                    sub.itens.forEach((item: any) => {
-                      itensParaFaturamento.push({
-                        categoria: item.categoria || 'Sem categoria',
-                        produto: item.produto || item.nome,
-                        quantidade: item.quantidade,
-                        valorTotal: item.preco * item.quantidade,
-                      });
-                    });
-                  });
+                const atualizado = {
+                  ...comanda,
+                  subcomandas: [...(comanda.subcomandas || []), novaPessoa]
+                };
 
-                  await fetch('/api/faturamento', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      tipo: 'comanda_avulsa',
-                      formaPagamento: 'Dinheiro',
-                      itensComanda: itensParaFaturamento,
-                      nomeHospede: comanda.cliente,
-                      criadoEm: new Date(),
-                    }),
-                  });
-                }
-
-                await atualizarComanda(comTodosPagos);
-
-                alert('Comanda finalizada!');
-                router.push('/consumo');
+                await atualizarComanda(atualizado);
+                setSubcomandaSelecionadaId(novaPessoa.id);
               }}
-
               className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 flex items-center gap-2 font-medium"
             >
               <span className="text-xl">+</span> Adicionar Pessoa
@@ -199,8 +183,8 @@ export default function ComandaDetalhes() {
               <div>
                 <div className="font-medium text-gray-600 mb-2">Selecione os itens:</div>
                 <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {precos?.categoriasExtras[categoriaSelecionada]?.itens.map((item: any) => (
-                    <div key={item.nome} className="border rounded-lg p-4 bg-gray-50 shadow-sm">
+                  {precos?.categoriasExtras[categoriaSelecionada]?.itens.map((item: any, index: number) => (
+                    <div key={`${item.nome}-${index}`} className="border rounded-lg p-4 bg-gray-50 shadow-sm">
                       <div className="font-semibold">{item.nome}</div>
                       <div className="text-sm text-gray-500">R$ {item.preco.toFixed(2)}</div>
                       {precos?.categoriasExtras[categoriaSelecionada]?.porKg ? (
@@ -315,7 +299,7 @@ export default function ComandaDetalhes() {
                   </thead>
                   <tbody>
                     {sub.itens.map((item: any, itemIndex: number) => (
-                      <tr key={itemIndex}
+                      <tr key={`${item.produto || item.nome}-${itemIndex}`}
                         className={item.pago ? "bg-gray-100 text-gray-400 line-through" : "bg-white"}>
                         <td>
                           <input
@@ -382,7 +366,7 @@ export default function ComandaDetalhes() {
               </div>
             )}
             <p className="text-right font-semibold text-green-700 mt-2">
-              Total: R$ {sub.total.toFixed(2)}
+              Total: R$ {Number(sub.total || 0).toFixed(2)}
             </p>
           </div>
         ))}
