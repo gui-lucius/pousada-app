@@ -120,20 +120,47 @@ export default function ComandaDetalhes() {
             {/* Adicionar pessoa */}
             <button
               onClick={async () => {
-                const nome = prompt('Nome da nova pessoa:');
-                if (!nome) return;
-                const novaSub = {
-                  id: Date.now().toString(),
-                  nome,
-                  itens: [],
-                  total: 0,
-                };
-                await atualizarComanda({
+                const comTodosPagos = {
                   ...comanda,
-                  subcomandas: [...(comanda.subcomandas || []), novaSub],
-                });
-                setSubcomandaSelecionadaId(novaSub.id);
+                  subcomandas: (comanda.subcomandas || []).map((sub: any) => ({
+                    ...sub,
+                    itens: sub.itens.map((item: any) => ({ ...item, pago: true })),
+                  })),
+                  status: 'paga',
+                };
+
+                if (comanda.tipo === 'comanda_avulsa') {
+                  const itensParaFaturamento: any[] = [];
+                  (comanda.subcomandas || []).forEach((sub: any) => {
+                    sub.itens.forEach((item: any) => {
+                      itensParaFaturamento.push({
+                        categoria: item.categoria || 'Sem categoria',
+                        produto: item.produto || item.nome,
+                        quantidade: item.quantidade,
+                        valorTotal: item.preco * item.quantidade,
+                      });
+                    });
+                  });
+
+                  await fetch('/api/faturamento', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      tipo: 'comanda_avulsa',
+                      formaPagamento: 'Dinheiro',
+                      itensComanda: itensParaFaturamento,
+                      nomeHospede: comanda.cliente,
+                      criadoEm: new Date(),
+                    }),
+                  });
+                }
+
+                await atualizarComanda(comTodosPagos);
+
+                alert('Comanda finalizada!');
+                router.push('/consumo');
               }}
+
               className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 flex items-center gap-2 font-medium"
             >
               <span className="text-xl">+</span> Adicionar Pessoa
@@ -376,36 +403,42 @@ export default function ComandaDetalhes() {
                   status: 'paga',
                 };
 
-                const itensParaFaturamento: any[] = [];
-                (comanda.subcomandas || []).forEach((sub: any) => {
-                  sub.itens.forEach((item: any) => {
-                    itensParaFaturamento.push({
-                      categoria: item.categoria || 'Sem categoria',
-                      produto: item.produto || item.nome,
-                      quantidade: item.quantidade,
-                      valorTotal: item.preco * item.quantidade,
+                if (comanda.tipo === 'comanda_avulsa') {
+                  const itensParaFaturamento: any[] = [];
+                  (comanda.subcomandas || []).forEach((sub: any) => {
+                    sub.itens.forEach((item: any) => {
+                      itensParaFaturamento.push({
+                        categoria: item.categoria || 'Sem categoria',
+                        produto: item.produto || item.nome,
+                        quantidade: item.quantidade,
+                        valorTotal: item.preco * item.quantidade,
+                      });
                     });
                   });
-                });
 
-                await fetch('/api/faturamento', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    tipo: 'comanda_avulsa', // ou comanda_hospede se for o caso
-                    formaPagamento: 'Dinheiro', // ajustar conforme seleção real
-                    itensComanda: itensParaFaturamento,
-                    nomeHospede: comanda.cliente, // se houver
-                    criadoEm: new Date(),
-                  }),
-                });
+                  await fetch('/api/faturamento', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      tipo: 'comanda_avulsa',
+                      formaPagamento: 'Dinheiro',
+                      itensComanda: itensParaFaturamento,
+                      nomeHospede: comanda.cliente,
+                      criadoEm: new Date(),
+                    }),
+                  });
+                }
 
+                // Apenas atualiza a comanda como paga
                 await atualizarComanda(comTodosPagos);
 
-                alert('Comanda finalizada e lançada no faturamento!');
+                alert(
+                  comanda.tipo === 'comanda_avulsa'
+                    ? 'Comanda finalizada e lançada no faturamento!'
+                    : 'Comanda de hóspede finalizada! (lançamento será no checkout)'
+                );
                 router.push('/consumo');
               }}
-
             />
           </div>
         )}

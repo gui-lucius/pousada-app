@@ -71,7 +71,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tipo: i === 0 ? 'hospede' : 'acompanhante',
       }))
 
-      // prepara payload de create (sem anotação Prisma para evitar conflito de tipos)
       const now = new Date()
       const createData: any = {
         cliente,
@@ -79,8 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status: status || 'aberta',
         criadoEm: criadoEm ? new Date(criadoEm) : now,
         updatedAt: updatedAt ? new Date(updatedAt) : now,
-        subcomandas: subcomandasComTipo as any,   // cast to any para satisfazer InputJsonValue
-        // conecta ao checkIn apenas se for hóspede
+        subcomandas: subcomandasComTipo as any,
         checkin: hospede && checkinId
           ? { connect: { id: Number(checkinId) } }
           : undefined,
@@ -105,7 +103,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const antes = await prisma.consumo.findUnique({ where: { id: String(id) } })
       console.log('[CONSUMO API][PUT] status antes:', antes?.status)
 
-      // normaliza status vindo do front
       const novoStatus = data.status === 'paga' ? 'pago' : data.status
       const updateData: any = { ...data, status: novoStatus }
 
@@ -118,7 +115,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // se mudou para 'pago', cria faturamento e associa
       if (antes?.status !== 'pago' && novoStatus === 'pago') {
-        console.log('[CONSUMO API][PUT] status mudou para "pago", criando faturamento')
+        console.log('[CONSUMO API][PUT] status mudou para "pago", verificando faturamento existente...')
+
+        const jaExiste = await prisma.faturamento.findFirst({
+          where: {
+            referenciaId: atualizada.id,
+            tipo: atualizada.hospede ? 'comanda_hospede' : 'comanda_avulsa',
+          },
+        })
+
+        if (jaExiste) {
+          console.log(`[CONSUMO API][PUT] faturamento já existe para consumo ${atualizada.id}, não criando duplicata`)
+          return res.status(200).json(atualizada)
+        }
 
         // calcula total
         let totalComanda = 0
@@ -137,7 +146,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         console.log('[CONSUMO API][PUT] totalComanda calculado:', totalComanda)
 
-        // cria faturamento e associa em transação
         const faturamento = await prisma.$transaction(async (tx) => {
           const ft = await tx.faturamento.create({
             data: {
@@ -152,7 +160,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               itensComanda: Array.isArray(itens) ? itens : [],
             },
           })
-          // associa o faturamento de volta no consumo
           await tx.consumo.update({
             where: { id: String(id) },
             data: { faturamentoId: ft.id },
@@ -165,7 +172,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(atualizada)
     }
 
-    // ============================= DELETE ===================================
+    // ============================= DELETE =================================
     if (req.method === 'DELETE') {
       console.log('[CONSUMO API][DELETE] Body recebido:', req.body)
       const { id } = req.body
@@ -178,7 +185,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(204).end()
     }
 
-    // MÉTODO NÃO SUPORTADO
+    // ========================= MÉTODO NÃO SUPORTADO ========================
     console.warn('[CONSUMO API] método não suportado:', req.method)
     res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE'])
     return res.status(405).json({ error: `Método ${req.method} não suportado` })
