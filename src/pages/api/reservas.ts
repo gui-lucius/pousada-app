@@ -8,6 +8,13 @@ function asMidnight(dateStr: string): Date {
   return new Date(dateStr.slice(0, 10) + 'T00:00:00.000Z')
 }
 
+// Helper: normaliza documento opcional -> string OU null
+function normalizeDocumento(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const v = value.trim()
+  return v.length ? v : null
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     // GET: Lista todas as reservas
@@ -21,18 +28,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // POST: Cria uma nova reserva
     if (req.method === 'POST') {
       const {
-        nome, documento, telefone, dataEntrada, dataSaida, numeroPessoas, chale,
-        observacoes, valor, status,
+        nome, documento, telefone = '', dataEntrada, dataSaida, numeroPessoas, chale,
+        observacoes = '', valor, status,
         desconto = 0,
         valorPagoAntecipado = 0,
         criancas0a3 = 0,
         criancas4a9 = 0,
-        email = ""
-      } = req.body
+        email = ''
+      } = req.body ?? {}
 
-      // Checagem dos campos obrigatórios
+      // Checagem dos campos obrigatórios (SEM documento)
       if (
-        !nome || !documento || !dataEntrada || !dataSaida ||
+        !nome || !dataEntrada || !dataSaida ||
         typeof numeroPessoas === 'undefined' || !chale ||
         typeof valor === 'undefined' || !status
       ) {
@@ -41,21 +48,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const nova = await prisma.reserva.create({
         data: {
-          nome,
-          documento,
-          telefone,
-          email,
-          dataEntrada: asMidnight(dataEntrada), // nunca undefined
-          dataSaida: asMidnight(dataSaida),
+          nome: String(nome),
+          documento: normalizeDocumento(documento), // << opcional
+          telefone: String(telefone ?? ''),
+          email: String(email ?? ''),
+          dataEntrada: asMidnight(String(dataEntrada)),
+          dataSaida: asMidnight(String(dataSaida)),
           numeroPessoas: Number(numeroPessoas),
-          chale,
-          observacoes,
+          chale: String(chale),
+          observacoes: String(observacoes ?? ''),
           valor: Number(valor),
-          status,
-          desconto: Number(desconto),
-          valorPagoAntecipado: Number(valorPagoAntecipado),
-          criancas0a3: Number(criancas0a3),
-          criancas4a9: Number(criancas4a9),
+          status: String(status),
+          desconto: Number(desconto ?? 0),
+          valorPagoAntecipado: Number(valorPagoAntecipado ?? 0),
+          criancas0a3: Number(criancas0a3 ?? 0),
+          criancas4a9: Number(criancas4a9 ?? 0),
         }
       })
       return res.status(201).json(nova)
@@ -64,40 +71,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // PUT: Atualiza reserva existente
     if (req.method === 'PUT') {
       const {
-        id, nome, documento, telefone, dataEntrada, dataSaida, numeroPessoas, chale,
-        observacoes, valor, status,
+        id, nome, documento, telefone = '', dataEntrada, dataSaida, numeroPessoas, chale,
+        observacoes = '', valor, status,
         desconto = 0,
         valorPagoAntecipado = 0,
         criancas0a3 = 0,
         criancas4a9 = 0,
-        email = ""
-      } = req.body
+        email = ''
+      } = req.body ?? {}
 
       if (!id) return res.status(400).json({ error: 'ID obrigatório.' })
 
-      // Mesmo check obrigatório das datas, para nunca dar undefined!
+      // Datas continuam obrigatórias
       if (!dataEntrada || !dataSaida) {
         return res.status(400).json({ error: 'Datas obrigatórias faltando.' })
       }
 
       const atualizada = await prisma.reserva.update({
-        where: { id },
+        where: { id: String(id) },
         data: {
-          nome,
-          documento,
-          telefone,
-          email,
-          dataEntrada: asMidnight(dataEntrada),
-          dataSaida: asMidnight(dataSaida),
+          nome: String(nome),
+          documento: normalizeDocumento(documento), // << opcional
+          telefone: String(telefone ?? ''),
+          email: String(email ?? ''),
+          dataEntrada: asMidnight(String(dataEntrada)),
+          dataSaida: asMidnight(String(dataSaida)),
           numeroPessoas: Number(numeroPessoas),
-          chale,
-          observacoes,
+          chale: String(chale),
+          observacoes: String(observacoes ?? ''),
           valor: Number(valor),
-          status,
-          desconto: Number(desconto),
-          valorPagoAntecipado: Number(valorPagoAntecipado),
-          criancas0a3: Number(criancas0a3),
-          criancas4a9: Number(criancas4a9),
+          status: String(status),
+          desconto: Number(desconto ?? 0),
+          valorPagoAntecipado: Number(valorPagoAntecipado ?? 0),
+          criancas0a3: Number(criancas0a3 ?? 0),
+          criancas4a9: Number(criancas4a9 ?? 0),
         }
       })
       return res.status(200).json(atualizada)
@@ -105,10 +112,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // DELETE: Deleta reserva por ID (via body)
     if (req.method === 'DELETE') {
-      const { id } = req.body
+      const { id } = req.body ?? {}
       if (!id) return res.status(400).json({ error: 'ID obrigatório.' })
-      await prisma.reserva.delete({ where: { id } })
-      // Status 204 = No Content
+      await prisma.reserva.delete({ where: { id: String(id) } })
       return res.status(204).end()
     }
 
@@ -116,7 +122,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Método não suportado' })
   } catch (error: any) {
     console.error(error)
-    // Retorna mensagem clara se erro vier de campo obrigatório faltando
     if (error.message && error.message.includes('Data obrigatória faltando')) {
       return res.status(400).json({ error: error.message })
     }

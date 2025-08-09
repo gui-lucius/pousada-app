@@ -8,7 +8,7 @@ import Botao from '@/components/ui/Botao'
 type Reserva = {
   id: string;
   nome: string;
-  documento: string;
+  documento?: string;
   telefone: string;
   email?: string;
   dataEntrada: string; // "YYYY-MM-DD"
@@ -166,7 +166,7 @@ export default function ReservasPage() {
   const preencherCamposParaEditar = (reserva: Reserva) => {
     setReservaEditandoId(reserva.id)
     setNome(reserva.nome)
-    setDocumento(reserva.documento)
+    setDocumento(reserva.documento ?? '')
     setTelefone(reserva.telefone)
     setEmail(reserva.email ?? '')
     setEntrada(reserva.dataEntrada.slice(0, 10)) // Pega só a data, nunca hora
@@ -185,13 +185,12 @@ export default function ReservasPage() {
   }
 
   const handleReservar = async () => {
-    if (!nome || !documento || !entrada || !saida || !pessoas || !chale) {
+    if (!nome || !entrada || !saida || !pessoas || !chale) {
       alert('Preencha todos os campos obrigatórios.')
       return
     }
     const reservaBody = {
       nome: nome.trim(),
-      documento: documento.trim(),
       telefone: telefone.trim(),
       email: email.trim(),
       dataEntrada: entrada, // "YYYY-MM-DD"
@@ -286,7 +285,7 @@ export default function ReservasPage() {
                       router.push(
                         `/checkin?reservaId=${r.id}` +
                         `&nome=${encodeURIComponent(r.nome)}` +
-                        `&documento=${encodeURIComponent(r.documento)}` +
+                        `&documento=${encodeURIComponent(r.documento ?? '')}`+
                         `&telefone=${encodeURIComponent(r.telefone)}` +
                         `&email=${encodeURIComponent(r.email ?? '')}` +
                         `&chale=${encodeURIComponent(r.chale)}` +
@@ -333,7 +332,7 @@ export default function ReservasPage() {
             )}
             <div className="grid sm:grid-cols-2 gap-4">
               <Input label="Nome do Hóspede *" value={nome} onChange={e => setNome(e.target.value)} />
-              <Input label="Documento *" value={documento} onChange={e => setDocumento(e.target.value)} />
+              <Input label="Documento (opcional)" value={documento} onChange={e => setDocumento(e.target.value)} />
               <Input label="Telefone" value={telefone} onChange={e => setTelefone(e.target.value)} />
               <Input label="Email" value={email} onChange={e => setEmail(e.target.value)} />
               <Input

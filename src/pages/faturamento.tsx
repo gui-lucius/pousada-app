@@ -266,15 +266,23 @@ export default function FaturamentoPage() {
                     <th className="p-2 text-left">Tipo</th>
                     <th className="p-2 text-left">Hospede/Chalé</th>
                     <th className="p-2 text-left">Valor</th>
-                    <th className="p-2 text-left">Pagamento</th>
+                    {/* Removido: Pagamento */}
                   </tr>
                 </thead>
                 <tbody>
                   {carregando && (
-                    <tr><td colSpan={5} className="py-8 text-center text-blue-600 animate-pulse">Carregando...</td></tr>
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-blue-600 animate-pulse">
+                        Carregando...
+                      </td>
+                    </tr>
                   )}
                   {!carregando && faturamentos.length === 0 && (
-                    <tr><td colSpan={5} className="py-8 text-center text-gray-400">Nenhum lançamento.</td></tr>
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-gray-400">
+                        Nenhum lançamento.
+                      </td>
+                    </tr>
                   )}
                   {!carregando && faturamentos.map(f => (
                     <tr key={f.id} className="border-b">
@@ -287,9 +295,9 @@ export default function FaturamentoPage() {
                         </span>
                       </td>
                       <td className="p-2 font-medium text-blue-800">
-                        {real(f.total||f.valorHospedagem||f.valorComanda||0)}
+                        {real(f.total || f.valorHospedagem || f.valorComanda || 0)}
                       </td>
-                      <td className="p-2">{f.formaPagamento}</td>
+                      {/* Removido: <td className="p-2">{f.formaPagamento}</td> */}
                     </tr>
                   ))}
                 </tbody>
